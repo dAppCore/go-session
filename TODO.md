@@ -6,11 +6,11 @@ Dispatched from core/go orchestration. Pick up tasks in order.
 
 ## Phase 0: Hardening & Test Coverage
 
-- [x] **Add parser tests** — Test `ParseTranscript()` with: minimal valid JSONL (1 user + 1 assistant message), tool call events (Bash, Read, Edit, Write, Grep, Glob, Task), truncated JSONL (incomplete last line), empty file, malformed JSON lines (should skip gracefully), very large session (1000+ events), nested tool results with arrays and maps. Also: HTML renderer tests, video/tape generator tests, search tests. 51 tests total, 90.9% coverage.
-- [x] **Add ListSessions tests** — Test with: empty directory, single session, multiple sessions sorted by date, non-.jsonl files ignored, malformed content fallback.
-- [x] **Tool extraction coverage** — Test `extractToolInput()` for all 7 supported tool types plus unknown tool fallback and nil input. Test `extractResultContent()` for string, array, map, and nil content.
-- [x] **Benchmark parsing** — `BenchmarkParseTranscript` with 4000-line JSONL (2000 assistant + 2000 user entries).
-- [x] **`go vet ./...` clean** — No warnings.
+- [x] **Add parser tests** — 51 tests, 90.9% coverage. `7771e64`
+- [x] **Add ListSessions tests** — 5 tests (empty, single, sorted, non-jsonl, malformed). `7771e64`
+- [x] **Tool extraction coverage** — All 7 tool types + unknown fallback + nil. `7771e64`
+- [x] **Benchmark parsing** — `BenchmarkParseTranscript` with 4000-line JSONL. `7771e64`
+- [x] **`go vet ./...` clean** — No warnings. `7771e64`
 
 ## Phase 1: Parser Robustness
 
