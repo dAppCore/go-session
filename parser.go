@@ -97,6 +97,14 @@ type taskInput struct {
 	SubagentType string `json:"subagent_type"`
 }
 
+// ParseStats reports diagnostic information from a parse run.
+type ParseStats struct {
+	TotalLines        int
+	SkippedLines      int
+	OrphanedToolCalls int
+	Warnings          []string
+}
+
 // ListSessions returns all sessions found in the Claude projects directory.
 func ListSessions(projectsDir string) ([]Session, error) {
 	matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
@@ -164,10 +172,10 @@ func ListSessions(projectsDir string) ([]Session, error) {
 }
 
 // ParseTranscript reads a JSONL session file and returns structured events.
-func ParseTranscript(path string) (*Session, error) {
+func ParseTranscript(path string) (*Session, *ParseStats, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open transcript: %w", err)
+		return nil, nil, fmt.Errorf("open transcript: %w", err)
 	}
 	defer f.Close()
 
@@ -176,6 +184,8 @@ func ParseTranscript(path string) (*Session, error) {
 		ID:   strings.TrimSuffix(base, ".jsonl"),
 		Path: path,
 	}
+
+	stats := &ParseStats{}
 
 	// Collect tool_use entries keyed by ID
 	type toolUse struct {
@@ -188,9 +198,32 @@ func ParseTranscript(path string) (*Session, error) {
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 4*1024*1024), 4*1024*1024)
 
+	var lineNum int
+	var lastRaw string
+	var lastLineFailed bool
+
 	for scanner.Scan() {
+		lineNum++
+		stats.TotalLines++
+
+		raw := scanner.Text()
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+
+		lastRaw = raw
+		lastLineFailed = false
+
 		var entry rawEntry
-		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+		if err := json.Unmarshal([]byte(raw), &entry); err != nil {
+			stats.SkippedLines++
+			preview := raw
+			if len(preview) > 100 {
+				preview = preview[:100]
+			}
+			stats.Warnings = append(stats.Warnings,
+				fmt.Sprintf("line %d: skipped (bad JSON): %s", lineNum, preview))
+			lastLineFailed = true
 			continue
 		}
 
@@ -281,7 +314,26 @@ func ParseTranscript(path string) (*Session, error) {
 		}
 	}
 
-	return sess, scanner.Err()
+	// Detect truncated final line
+	if lastLineFailed && lastRaw != "" {
+		stats.Warnings = append(stats.Warnings, "truncated final line")
+	}
+
+	// Check for scanner buffer errors
+	if scanErr := scanner.Err(); scanErr != nil {
+		return nil, stats, scanErr
+	}
+
+	// Track orphaned tool calls (tool_use with no matching result)
+	stats.OrphanedToolCalls = len(pendingTools)
+	if stats.OrphanedToolCalls > 0 {
+		for id := range pendingTools {
+			stats.Warnings = append(stats.Warnings,
+				fmt.Sprintf("orphaned tool call: %s", id))
+		}
+	}
+
+	return sess, stats, nil
 }
 
 func extractToolInput(toolName string, raw json.RawMessage) string {

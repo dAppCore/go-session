@@ -25,7 +25,7 @@ func Search(projectsDir, query string) ([]SearchResult, error) {
 	query = strings.ToLower(query)
 
 	for _, path := range matches {
-		sess, err := ParseTranscript(path)
+		sess, _, err := ParseTranscript(path)
 		if err != nil {
 			continue
 		}

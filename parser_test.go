@@ -117,7 +117,7 @@ func TestParseTranscript_MinimalValid_Good(t *testing.T) {
 		assistantTextEntry(ts(1), "Hi there!"),
 	)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 	require.NotNil(t, sess)
 
@@ -187,7 +187,7 @@ func TestParseTranscript_ToolCalls_Good(t *testing.T) {
 
 	path := writeJSONL(t, dir, "tools.jsonl", lines...)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	// Count tool_use events
@@ -235,7 +235,7 @@ func TestParseTranscript_ToolError_Good(t *testing.T) {
 		toolResultEntry(ts(1), "tool-err-1", "cat: /nonexistent: No such file or directory", true),
 	)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	var toolEvents []Event
@@ -256,7 +256,7 @@ func TestParseTranscript_EmptyFile_Bad(t *testing.T) {
 	// Write a truly empty file
 	require.NoError(t, os.WriteFile(path, []byte(""), 0644))
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 	require.NotNil(t, sess)
 	assert.Empty(t, sess.Events)
@@ -273,7 +273,7 @@ func TestParseTranscript_MalformedJSON_Bad(t *testing.T) {
 		assistantTextEntry(ts(2), "This is also valid"),
 	)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err, "malformed lines should be skipped, not cause an error")
 	require.NotNil(t, sess)
 
@@ -292,7 +292,7 @@ func TestParseTranscript_TruncatedJSONL_Bad(t *testing.T) {
 
 	path := writeJSONL(t, dir, "truncated.jsonl", validLine, truncated)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err, "truncated last line should be skipped gracefully")
 	require.NotNil(t, sess)
 
@@ -322,7 +322,7 @@ func TestParseTranscript_LargeSession_Good(t *testing.T) {
 
 	path := writeJSONL(t, dir, "large.jsonl", lines...)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	var toolCount int
@@ -368,7 +368,7 @@ func TestParseTranscript_NestedToolResults_Good(t *testing.T) {
 
 	path := writeJSONL(t, dir, "nested.jsonl", lines...)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	var toolEvents []Event
@@ -413,7 +413,7 @@ func TestParseTranscript_NestedMapResult_Good(t *testing.T) {
 
 	path := writeJSONL(t, dir, "map-result.jsonl", lines...)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	var toolEvents []Event
@@ -428,7 +428,7 @@ func TestParseTranscript_NestedMapResult_Good(t *testing.T) {
 }
 
 func TestParseTranscript_FileNotFound_Ugly(t *testing.T) {
-	_, err := ParseTranscript("/nonexistent/path/session.jsonl")
+	_, _, err := ParseTranscript("/nonexistent/path/session.jsonl")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "open transcript")
 }
@@ -439,7 +439,7 @@ func TestParseTranscript_SessionIDFromFilename_Good(t *testing.T) {
 		userTextEntry(ts(0), "test"),
 	)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 	assert.Equal(t, "abc123def456", sess.ID)
 }
@@ -452,7 +452,7 @@ func TestParseTranscript_TimestampsTracked_Good(t *testing.T) {
 		userTextEntry(ts(10), "end"),
 	)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	expectedStart, _ := time.Parse(time.RFC3339Nano, ts(0))
@@ -469,7 +469,7 @@ func TestParseTranscript_TextTruncation_Good(t *testing.T) {
 		userTextEntry(ts(0), longText),
 	)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	require.Len(t, sess.Events, 1)
@@ -506,7 +506,7 @@ func TestParseTranscript_MixedContentBlocks_Good(t *testing.T) {
 
 	path := writeJSONL(t, dir, "mixed.jsonl", lines...)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	// Should have an assistant text event + a tool_use event
@@ -524,7 +524,7 @@ func TestParseTranscript_UnmatchedToolResult_Bad(t *testing.T) {
 		userTextEntry(ts(1), "Normal message"),
 	)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	// Only the user text event should appear; the orphan tool result is ignored
@@ -548,7 +548,7 @@ func TestParseTranscript_EmptyTimestamp_Bad(t *testing.T) {
 	})
 	path := writeJSONL(t, dir, "no-ts.jsonl", line)
 
-	sess, err := ParseTranscript(path)
+	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
 
 	// The event should still be parsed, but StartTime remains zero
@@ -780,4 +780,175 @@ func TestFormatDuration_Good(t *testing.T) {
 	assert.Equal(t, "1.5s", formatDuration(1500*time.Millisecond))
 	assert.Equal(t, "2m30s", formatDuration(2*time.Minute+30*time.Second))
 	assert.Equal(t, "1h5m", formatDuration(1*time.Hour+5*time.Minute))
+}
+
+// --- ParseStats tests ---
+
+func TestParseStats_CleanJSONL_Good(t *testing.T) {
+	dir := t.TempDir()
+	path := writeJSONL(t, dir, "clean.jsonl",
+		userTextEntry(ts(0), "Hello"),
+		toolUseEntry(ts(1), "Bash", "tool-1", map[string]interface{}{
+			"command": "ls",
+		}),
+		toolResultEntry(ts(2), "tool-1", "ok", false),
+		assistantTextEntry(ts(3), "Done"),
+	)
+
+	_, stats, err := ParseTranscript(path)
+	require.NoError(t, err)
+	require.NotNil(t, stats)
+
+	assert.Equal(t, 4, stats.TotalLines)
+	assert.Equal(t, 0, stats.SkippedLines)
+	assert.Equal(t, 0, stats.OrphanedToolCalls)
+	assert.Empty(t, stats.Warnings)
+}
+
+func TestParseStats_MalformedLines_Good(t *testing.T) {
+	dir := t.TempDir()
+	path := writeJSONL(t, dir, "malformed-stats.jsonl",
+		`{bad json line one`,
+		userTextEntry(ts(0), "Valid line"),
+		`{another bad line}}}`,
+		`not even close to json`,
+		assistantTextEntry(ts(1), "Also valid"),
+	)
+
+	_, stats, err := ParseTranscript(path)
+	require.NoError(t, err)
+	require.NotNil(t, stats)
+
+	assert.Equal(t, 5, stats.TotalLines)
+	assert.Equal(t, 3, stats.SkippedLines)
+	assert.Len(t, stats.Warnings, 3)
+
+	// Each warning should contain line number and preview
+	for _, w := range stats.Warnings {
+		assert.Contains(t, w, "skipped (bad JSON)")
+	}
+}
+
+func TestParseStats_OrphanedToolCalls_Good(t *testing.T) {
+	dir := t.TempDir()
+	// Two tool_use entries with no matching tool_result
+	path := writeJSONL(t, dir, "orphaned.jsonl",
+		toolUseEntry(ts(0), "Bash", "orphan-1", map[string]interface{}{
+			"command": "ls",
+		}),
+		toolUseEntry(ts(1), "Read", "orphan-2", map[string]interface{}{
+			"file_path": "/tmp/file.go",
+		}),
+		assistantTextEntry(ts(2), "Never got results"),
+	)
+
+	_, stats, err := ParseTranscript(path)
+	require.NoError(t, err)
+	require.NotNil(t, stats)
+
+	assert.Equal(t, 2, stats.OrphanedToolCalls)
+
+	// Warnings should mention orphaned tool IDs
+	var orphanWarnings int
+	for _, w := range stats.Warnings {
+		if strings.Contains(w, "orphaned tool call") {
+			orphanWarnings++
+		}
+	}
+	assert.Equal(t, 2, orphanWarnings)
+}
+
+func TestParseStats_TruncatedFinalLine_Good(t *testing.T) {
+	dir := t.TempDir()
+	validLine := userTextEntry(ts(0), "Hello")
+	truncatedLine := `{"type":"assi`
+
+	// Write without trailing newline after truncated line
+	path := filepath.Join(dir, "truncfinal.jsonl")
+	require.NoError(t, os.WriteFile(path, []byte(validLine+"\n"+truncatedLine+"\n"), 0644))
+
+	_, stats, err := ParseTranscript(path)
+	require.NoError(t, err)
+	require.NotNil(t, stats)
+
+	assert.Equal(t, 1, stats.SkippedLines)
+
+	// Should detect truncated final line
+	var foundTruncated bool
+	for _, w := range stats.Warnings {
+		if strings.Contains(w, "truncated final line") {
+			foundTruncated = true
+		}
+	}
+	assert.True(t, foundTruncated, "should detect truncated final line")
+}
+
+func TestParseStats_FileEndingMidJSON_Good(t *testing.T) {
+	dir := t.TempDir()
+	validLine := userTextEntry(ts(0), "Hello")
+	midJSON := `{"type":"assistant","timestamp":"2026-02-20T10:00:01Z","sessionId":"test","message":{"role":"assi`
+
+	path := filepath.Join(dir, "midjson.jsonl")
+	require.NoError(t, os.WriteFile(path, []byte(validLine+"\n"+midJSON+"\n"), 0644))
+
+	sess, stats, err := ParseTranscript(path)
+	require.NoError(t, err)
+	require.NotNil(t, sess)
+	require.NotNil(t, stats)
+
+	assert.Equal(t, 1, stats.SkippedLines)
+
+	var foundTruncated bool
+	for _, w := range stats.Warnings {
+		if strings.Contains(w, "truncated final line") {
+			foundTruncated = true
+		}
+	}
+	assert.True(t, foundTruncated)
+}
+
+func TestParseStats_CompleteFileNoTrailingNewline_Good(t *testing.T) {
+	dir := t.TempDir()
+	line := userTextEntry(ts(0), "Hello")
+
+	// Write without trailing newline — should still parse fine
+	path := filepath.Join(dir, "nonewline.jsonl")
+	require.NoError(t, os.WriteFile(path, []byte(line), 0644))
+
+	sess, stats, err := ParseTranscript(path)
+	require.NoError(t, err)
+	require.NotNil(t, sess)
+	require.NotNil(t, stats)
+
+	assert.Equal(t, 0, stats.SkippedLines)
+	assert.Equal(t, 0, stats.OrphanedToolCalls)
+	assert.Len(t, sess.Events, 1)
+
+	// No truncation warning since the line parsed successfully
+	var foundTruncated bool
+	for _, w := range stats.Warnings {
+		if strings.Contains(w, "truncated final line") {
+			foundTruncated = true
+		}
+	}
+	assert.False(t, foundTruncated)
+}
+
+func TestParseStats_WarningPreviewTruncated_Good(t *testing.T) {
+	dir := t.TempDir()
+	// A malformed line longer than 100 chars
+	longBadLine := `{` + strings.Repeat("x", 200)
+	path := writeJSONL(t, dir, "longbad.jsonl",
+		longBadLine,
+		userTextEntry(ts(0), "Valid"),
+	)
+
+	_, stats, err := ParseTranscript(path)
+	require.NoError(t, err)
+
+	require.Len(t, stats.Warnings, 1) // 1 skipped line (last line is valid, no truncation)
+	// The preview in the warning should be at most ~100 chars of the bad line
+	assert.True(t, len(stats.Warnings[0]) < 200,
+		"warning preview should be truncated for long lines")
+	assert.Contains(t, stats.Warnings[0], "line 1:")
 }

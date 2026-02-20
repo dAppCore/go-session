@@ -18,7 +18,7 @@ func BenchmarkParseTranscript(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		sess, err := ParseTranscript(path)
+		sess, _, err := ParseTranscript(path)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -37,7 +37,7 @@ func BenchmarkParseTranscript_Large(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		_, err := ParseTranscript(path)
+		_, _, err := ParseTranscript(path)
 		if err != nil {
 			b.Fatal(err)
 		}
