@@ -6,11 +6,11 @@ Dispatched from core/go orchestration. Pick up tasks in order.
 
 ## Phase 0: Hardening & Test Coverage
 
-- [x] **Add parser tests** — Test `ParseTranscript()` with: minimal valid JSONL (1 user + 1 assistant message), tool call events (Bash, Read, Edit, Write, Grep, Glob, Task), truncated JSONL (incomplete last line), empty file, malformed JSON lines (should skip gracefully), very large session (1000+ events), nested tool results with arrays and maps. Also added HTML, video, and search tests. 67 tests, 90.9% coverage.
-- [x] **Add ListSessions tests** — Test with: empty directory, single session, multiple sessions sorted by date, non-.jsonl files ignored, malformed JSONL fallback to modtime.
-- [x] **Tool extraction coverage** — Test `extractToolInput()` for each supported tool type (Bash, Read, Edit, Write, Grep, Glob, Task) plus nil input, invalid JSON, and unknown tool fallback.
-- [x] **Benchmark parsing** — `BenchmarkParseTranscript` with 2.2MB (5K tools) and 11MB (25K tools) JSONL files. Plus `BenchmarkListSessions` and `BenchmarkSearch`. Uses `b.Loop()` (Go 1.25+).
-- [x] **`go vet ./...` clean** — Verified clean, no warnings.
+- [x] **Add parser tests** — 67 tests, 90.9% coverage. ParseTranscript with minimal JSONL, all 7 tool types, errors, truncated/malformed, large sessions (1100+), nested results. `f40caaa`
+- [x] **Add ListSessions tests** — Empty dir, single/multi sorted, non-JSONL ignored, malformed JSONL modtime fallback. `f40caaa`
+- [x] **Tool extraction coverage** — All 7 tool types + nil, invalid JSON, unknown tool fallback. `f40caaa`
+- [x] **Benchmark parsing** — 2.2MB (5K tools) and 11MB (25K tools) files. Plus ListSessions and Search benchmarks. `b.Loop()` (Go 1.25+). `f40caaa`
+- [x] **`go vet ./...` clean** — No warnings. `f40caaa`
 
 ## Phase 1: Parser Robustness
 
