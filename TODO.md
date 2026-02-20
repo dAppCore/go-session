@@ -42,10 +42,10 @@ The parser already streams (bufio.Scanner, 4MB buffer), skips malformed JSON lin
 
 ## Phase 3: Timeline UI
 
-- [ ] Feed parsed events into go-html for visual session timeline
-- [ ] Colour-code events by type (tool call, assistant message, user message)
-- [ ] Add collapsible detail panels for long tool outputs
-- [ ] Export timeline as standalone HTML file
+- [x] **Visual session timeline** — `RenderHTML()` in `html.go` (257 LOC). Self-contained HTML with dark theme, sticky header, search bar, type filter dropdown, keyboard shortcut (`/` to focus search). Uses raw HTML generation (stdlib `html` package) — no go-html dependency needed. `9b32678`
+- [x] **Colour-code events by type** — CSS classes: `.bash` (green), `.error` (red), `.user` (yellow), `.assistant` (dim). Check/cross status icons for tool results. `9b32678`
+- [x] **Collapsible detail panels** — `toggle()` JS with animated arrow rotation. `.event-body` hidden by default, shown on click. Max-height 400px with overflow scroll. Smart labels per tool type (Command/Target/File/Message/Response). `9b32678`
+- [x] **Export standalone HTML file** — `RenderHTML(sess *Session, outputPath string) error`. Self-contained — all CSS/JS inline, no external deps. XSS-safe via `html.EscapeString()`. 6 tests including special character/XSS coverage. `9b32678`
 
 ---
 
