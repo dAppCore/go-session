@@ -14,17 +14,41 @@ Dispatched from core/go orchestration. Pick up tasks in order.
 
 ## Phase 1: Parser Robustness
 
-- [ ] Handle truncated JSONL (incomplete final line, missing closing brace)
-- [ ] Handle very large sessions (streaming parse, avoid loading entire file into memory)
-- [ ] Handle non-standard tool formats (custom MCP tools, unknown tool names)
-- [ ] Add graceful error recovery — skip malformed lines, log warnings
+The parser already streams (bufio.Scanner, 4MB buffer), skips malformed JSON lines, and handles unknown tools via field-name fallback. Phase 1 adds structured reporting and orphan detection.
+
+### 1.1 Parse Stats
+
+- [ ] **Add `ParseStats` struct** — Track: `TotalLines int`, `SkippedLines int`, `OrphanedToolCalls int`, `Warnings []string`. Return alongside `*Session` from `ParseTranscript`. Signature becomes `ParseTranscript(path string) (*Session, *ParseStats, error)`. **Keep backward compat**: callers can ignore the stats.
+- [ ] **Count skipped lines** — Increment `SkippedLines` when `json.Unmarshal` fails. Add the line number and first 100 chars to `Warnings`.
+- [ ] **Track orphaned tool calls** — After scanning, any entries remaining in `pendingTools` map are orphaned (tool_use with no result). Set `OrphanedToolCalls = len(pendingTools)`. Include orphaned tool IDs in `Warnings`.
+- [ ] **Tests** — Verify ParseStats counts with: (a) clean JSONL, (b) 3 malformed lines mixed in, (c) 2 orphaned tool calls, (d) truncated final line.
+
+### 1.2 Truncated JSONL Detection
+
+- [ ] **Detect incomplete final line** — After `scanner.Scan()` loop, check `scanner.Err()` for buffer errors. Also detect if last raw line was non-empty but failed `json.Unmarshal` — add to Warnings as "truncated final line".
+- [ ] **Tests** — File ending without newline, file ending mid-JSON object `{"type":"assi`, file ending with complete line but no trailing newline.
 
 ## Phase 2: Analytics
 
-- [ ] Session duration stats (start time, end time, wall clock, active time)
-- [ ] Tool usage frequency (count per tool type, percentage breakdown)
-- [ ] Error rate tracking (failed tool calls, retries, panics)
-- [ ] Token usage estimation from assistant message lengths
+### 2.1 SessionAnalytics Struct
+
+- [ ] **Create `analytics.go`** — `type SessionAnalytics struct`:
+  - `Duration time.Duration` — EndTime - StartTime (wall clock)
+  - `ActiveTime time.Duration` — Sum of all tool call durations
+  - `EventCount int` — Total events
+  - `ToolCounts map[string]int` — e.g. `{"Bash": 42, "Read": 18, "Edit": 7}`
+  - `ErrorCounts map[string]int` — Failed calls per tool
+  - `SuccessRate float64` — (total - errors) / total
+  - `AvgLatency map[string]time.Duration` — Mean tool call duration per type
+  - `MaxLatency map[string]time.Duration` — Worst-case per tool
+  - `EstimatedInputTokens int` — Sum of len(evt.Input) / 4 for all events
+  - `EstimatedOutputTokens int` — Sum of len(evt.Output) / 4 for all events
+
+### 2.2 Analyze Function
+
+- [ ] **`Analyze(sess *Session) *SessionAnalytics`** — Iterate `sess.Events`, populate all fields. Pure function, no I/O.
+- [ ] **`FormatAnalytics(a *SessionAnalytics) string`** — Tabular text output: duration, tool breakdown, error rates, latency stats. Suitable for CLI display.
+- [ ] **Tests** — (a) Empty session, (b) single tool call, (c) mixed tools with errors, (d) verify latency calculations, (e) token estimation matches expected values.
 
 ## Phase 3: Timeline UI
 
