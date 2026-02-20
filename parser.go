@@ -4,12 +4,17 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 )
+
+// maxScannerBuffer is the maximum line length the scanner will accept.
+// Set to 8 MiB to handle very large tool outputs without truncation.
+const maxScannerBuffer = 8 * 1024 * 1024
 
 // Event represents a single action in a session timeline.
 type Event struct {
@@ -172,6 +177,7 @@ func ListSessions(projectsDir string) ([]Session, error) {
 }
 
 // ParseTranscript reads a JSONL session file and returns structured events.
+// Malformed or truncated lines are skipped; diagnostics are reported in ParseStats.
 func ParseTranscript(path string) (*Session, *ParseStats, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -180,14 +186,33 @@ func ParseTranscript(path string) (*Session, *ParseStats, error) {
 	defer f.Close()
 
 	base := filepath.Base(path)
+	id := strings.TrimSuffix(base, ".jsonl")
+
+	sess, stats, err := parseFromReader(f, id)
+	if sess != nil {
+		sess.Path = path
+	}
+	return sess, stats, err
+}
+
+// ParseTranscriptReader parses a JSONL session from an io.Reader, enabling
+// streaming parse without needing a file on disc. The id parameter sets
+// the session ID (since there is no file name to derive it from).
+func ParseTranscriptReader(r io.Reader, id string) (*Session, *ParseStats, error) {
+	return parseFromReader(r, id)
+}
+
+// parseFromReader is the shared implementation for both file-based and
+// reader-based parsing. It scans line-by-line using bufio.Scanner with
+// an 8 MiB buffer, gracefully skipping malformed lines.
+func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	sess := &Session{
-		ID:   strings.TrimSuffix(base, ".jsonl"),
-		Path: path,
+		ID: id,
 	}
 
 	stats := &ParseStats{}
 
-	// Collect tool_use entries keyed by ID
+	// Collect tool_use entries keyed by ID.
 	type toolUse struct {
 		timestamp time.Time
 		tool      string
@@ -195,8 +220,8 @@ func ParseTranscript(path string) (*Session, *ParseStats, error) {
 	}
 	pendingTools := make(map[string]toolUse)
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 4*1024*1024), 4*1024*1024)
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, maxScannerBuffer), maxScannerBuffer)
 
 	var lineNum int
 	var lastRaw string
@@ -314,17 +339,17 @@ func ParseTranscript(path string) (*Session, *ParseStats, error) {
 		}
 	}
 
-	// Detect truncated final line
+	// Detect truncated final line.
 	if lastLineFailed && lastRaw != "" {
 		stats.Warnings = append(stats.Warnings, "truncated final line")
 	}
 
-	// Check for scanner buffer errors
+	// Check for scanner buffer errors.
 	if scanErr := scanner.Err(); scanErr != nil {
 		return nil, stats, scanErr
 	}
 
-	// Track orphaned tool calls (tool_use with no matching result)
+	// Track orphaned tool calls (tool_use with no matching result).
 	stats.OrphanedToolCalls = len(pendingTools)
 	if stats.OrphanedToolCalls > 0 {
 		for id := range pendingTools {
