@@ -38,3 +38,24 @@ Extracted from `forge.lthn.ai/core/go` `pkg/session/` on 19 Feb 2026.
 - `extractResultContent()` handles string, `[]interface{}`, and `map[string]interface{}` content types. All three paths plus nil are tested.
 - `ListSessions` falls back to file mod time when no valid timestamps are found in a JSONL file.
 - `go vet ./...` was clean from the start — no fixes needed.
+
+## 2026-02-20: Phase 1 Streaming & Edge Cases
+
+### New API surface
+
+- `ParseTranscriptReader(r io.Reader, id string) (*Session, *ParseStats, error)` — streaming parse from any `io.Reader` (pipes, network, in-memory buffers). No file on disc required.
+- `parseFromReader(r io.Reader, id string)` — internal shared implementation, eliminating code duplication between `ParseTranscript` and `ParseTranscriptReader`.
+- `maxScannerBuffer` constant: 8 MiB (bumped from 4 MiB), handles very large tool outputs.
+
+### Tests added (18 new, 104 total)
+
+- **Streaming io.Reader (6 tests):** strings.Reader, bytes.Buffer, empty reader, large lines (128KB), malformed lines with stats, orphaned tool calls.
+- **Custom MCP tools (3 tests):** `mcp__forge__create_issue` with flat input, nested JSON input, empty input object.
+- **Edge case recovery (5 tests):** binary garbage, null bytes, 5MB lines, malformed message JSON, malformed content blocks.
+- **Additional truncated JSONL (3 tests):** missing closing brace, mid-key truncation, all-bad-lines file.
+- **ListSessions truncated files (1 test):** partially truncated file still extracts valid timestamps.
+
+### Coverage
+
+- 93.0% statement coverage (up from 90.9%).
+- `ParseTranscript`, `ParseTranscriptReader`, `extractToolInput`, `extractResultContent`, `truncate` all at 100%.
