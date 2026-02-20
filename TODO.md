@@ -18,37 +18,27 @@ The parser already streams (bufio.Scanner, 4MB buffer), skips malformed JSON lin
 
 ### 1.1 Parse Stats
 
-- [ ] **Add `ParseStats` struct** — Track: `TotalLines int`, `SkippedLines int`, `OrphanedToolCalls int`, `Warnings []string`. Return alongside `*Session` from `ParseTranscript`. Signature becomes `ParseTranscript(path string) (*Session, *ParseStats, error)`. **Keep backward compat**: callers can ignore the stats.
-- [ ] **Count skipped lines** — Increment `SkippedLines` when `json.Unmarshal` fails. Add the line number and first 100 chars to `Warnings`.
-- [ ] **Track orphaned tool calls** — After scanning, any entries remaining in `pendingTools` map are orphaned (tool_use with no result). Set `OrphanedToolCalls = len(pendingTools)`. Include orphaned tool IDs in `Warnings`.
-- [ ] **Tests** — Verify ParseStats counts with: (a) clean JSONL, (b) 3 malformed lines mixed in, (c) 2 orphaned tool calls, (d) truncated final line.
+- [x] **Add `ParseStats` struct** — Track: `TotalLines int`, `SkippedLines int`, `OrphanedToolCalls int`, `Warnings []string`. Return alongside `*Session` from `ParseTranscript`. Signature becomes `ParseTranscript(path string) (*Session, *ParseStats, error)`. **Keep backward compat**: callers can ignore the stats. `a6fb934`
+- [x] **Count skipped lines** — Increment `SkippedLines` when `json.Unmarshal` fails. Add the line number and first 100 chars to `Warnings`. `a6fb934`
+- [x] **Track orphaned tool calls** — After scanning, any entries remaining in `pendingTools` map are orphaned (tool_use with no result). Set `OrphanedToolCalls = len(pendingTools)`. Include orphaned tool IDs in `Warnings`. `a6fb934`
+- [x] **Tests** — Verify ParseStats counts with: (a) clean JSONL, (b) 3 malformed lines mixed in, (c) 2 orphaned tool calls, (d) truncated final line. `a6fb934`
 
 ### 1.2 Truncated JSONL Detection
 
-- [ ] **Detect incomplete final line** — After `scanner.Scan()` loop, check `scanner.Err()` for buffer errors. Also detect if last raw line was non-empty but failed `json.Unmarshal` — add to Warnings as "truncated final line".
-- [ ] **Tests** — File ending without newline, file ending mid-JSON object `{"type":"assi`, file ending with complete line but no trailing newline.
+- [x] **Detect incomplete final line** — After `scanner.Scan()` loop, check `scanner.Err()` for buffer errors. Also detect if last raw line was non-empty but failed `json.Unmarshal` — add to Warnings as "truncated final line". `a6fb934`
+- [x] **Tests** — File ending without newline, file ending mid-JSON object `{"type":"assi`, file ending with complete line but no trailing newline. `a6fb934`
 
 ## Phase 2: Analytics
 
 ### 2.1 SessionAnalytics Struct
 
-- [ ] **Create `analytics.go`** — `type SessionAnalytics struct`:
-  - `Duration time.Duration` — EndTime - StartTime (wall clock)
-  - `ActiveTime time.Duration` — Sum of all tool call durations
-  - `EventCount int` — Total events
-  - `ToolCounts map[string]int` — e.g. `{"Bash": 42, "Read": 18, "Edit": 7}`
-  - `ErrorCounts map[string]int` — Failed calls per tool
-  - `SuccessRate float64` — (total - errors) / total
-  - `AvgLatency map[string]time.Duration` — Mean tool call duration per type
-  - `MaxLatency map[string]time.Duration` — Worst-case per tool
-  - `EstimatedInputTokens int` — Sum of len(evt.Input) / 4 for all events
-  - `EstimatedOutputTokens int` — Sum of len(evt.Output) / 4 for all events
+- [x] **Create `analytics.go`** — `type SessionAnalytics struct` with all fields. `a6fb934`
 
-### 2.2 Analyze Function
+### 2.2 Analyse Function
 
-- [ ] **`Analyze(sess *Session) *SessionAnalytics`** — Iterate `sess.Events`, populate all fields. Pure function, no I/O.
-- [ ] **`FormatAnalytics(a *SessionAnalytics) string`** — Tabular text output: duration, tool breakdown, error rates, latency stats. Suitable for CLI display.
-- [ ] **Tests** — (a) Empty session, (b) single tool call, (c) mixed tools with errors, (d) verify latency calculations, (e) token estimation matches expected values.
+- [x] **`Analyse(sess *Session) *SessionAnalytics`** — Iterate `sess.Events`, populate all fields. Pure function, no I/O. `a6fb934`
+- [x] **`FormatAnalytics(a *SessionAnalytics) string`** — Tabular text output: duration, tool breakdown, error rates, latency stats. Suitable for CLI display. `a6fb934`
+- [x] **Tests** — (a) Empty session, (b) single tool call, (c) mixed tools with errors, (d) verify latency calculations, (e) token estimation matches expected values. `a6fb934`
 
 ## Phase 3: Timeline UI
 
