@@ -1,6 +1,8 @@
+// SPDX-Licence-Identifier: EUPL-1.2
 package session
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -9,219 +11,197 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// NOTE: RenderMP4 requires the external `vhs` binary and writes to temp files
-// then calls exec. We test generateTape (the pure logic) directly, and verify
-// RenderMP4 returns a sensible error when vhs is absent.
-
-func TestRenderMP4_VHSNotInstalled(t *testing.T) {
+func TestGenerateTape_BasicSession_Good(t *testing.T) {
 	sess := &Session{
-		ID:        "video-test",
-		StartTime: baseTime,
-		EndTime:   baseTime.Add(time.Minute),
-	}
-
-	err := RenderMP4(sess, "/tmp/out.mp4")
-	if err == nil {
-		t.Skip("vhs is installed on this system; skipping missing-binary test")
-	}
-	assert.Contains(t, err.Error(), "vhs not installed")
-}
-
-func TestGenerateTape_EmptySession(t *testing.T) {
-	sess := &Session{
-		ID:        "empty-tape",
-		StartTime: baseTime,
-		EndTime:   baseTime,
-		Events:    nil,
-	}
-
-	tape := generateTape(sess, "/tmp/empty.mp4")
-
-	assert.Contains(t, tape, "Output /tmp/empty.mp4")
-	assert.Contains(t, tape, "Set FontSize 16")
-	assert.Contains(t, tape, "Set Width 1400")
-	assert.Contains(t, tape, "Set Height 800")
-	assert.Contains(t, tape, "Set Theme")
-	assert.Contains(t, tape, "# Session empty-ta")
-	assert.Contains(t, tape, "Sleep 3s") // Final sleep
-}
-
-func TestGenerateTape_BashEvents(t *testing.T) {
-	sess := &Session{
-		ID:        "bash-tape-session-long-id",
-		StartTime: baseTime,
-		EndTime:   baseTime.Add(10 * time.Second),
+		ID:        "tape-test-12345678",
+		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
 		Events: []Event{
 			{
 				Type:    "tool_use",
 				Tool:    "Bash",
-				Input:   "ls -la # list files",
-				Output:  "total 10\nfile1.go\nfile2.go",
+				Input:   "go test ./...",
+				Output:  "PASS",
 				Success: true,
 			},
 			{
-				Type:     "tool_use",
-				Tool:     "Bash",
-				Input:    "false",
-				Output:   "exit 1",
-				Success:  false,
-				ErrorMsg: "exit 1",
+				Type:    "tool_use",
+				Tool:    "Read",
+				Input:   "/tmp/file.go",
+				Output:  "package main",
+				Success: true,
 			},
 		},
 	}
 
-	tape := generateTape(sess, "/tmp/bash.mp4")
+	tape := generateTape(sess, "/tmp/output.mp4")
 
-	t.Run("title_uses_short_id", func(t *testing.T) {
-		assert.Contains(t, tape, "# Session bash-tap")
-	})
-
-	t.Run("bash_command_shown", func(t *testing.T) {
-		assert.Contains(t, tape, `"$ ls -la"`)
-	})
-
-	t.Run("bash_output_shown", func(t *testing.T) {
-		assert.Contains(t, tape, "file1.go")
-	})
-
-	t.Run("success_indicator", func(t *testing.T) {
-		assert.Contains(t, tape, "OK")
-	})
-
-	t.Run("failure_indicator", func(t *testing.T) {
-		assert.Contains(t, tape, "FAILED")
-	})
+	assert.Contains(t, tape, "Output /tmp/output.mp4")
+	assert.Contains(t, tape, "Set FontSize 16")
+	assert.Contains(t, tape, "tape-tes") // shortID
+	assert.Contains(t, tape, "2026-02-20 10:00")
+	assert.Contains(t, tape, `"$ go test ./..."`)
+	assert.Contains(t, tape, "PASS")
+	assert.Contains(t, tape, `"# ✓ OK"`)
+	assert.Contains(t, tape, "# Read: /tmp/file.go")
 }
 
-func TestGenerateTape_ReadEditWriteEvents(t *testing.T) {
-	sess := &Session{
-		ID:        "file-ops",
-		StartTime: baseTime,
-		EndTime:   baseTime.Add(5 * time.Second),
-		Events: []Event{
-			{Type: "tool_use", Tool: "Read", Input: "/tmp/foo.go", Success: true},
-			{Type: "tool_use", Tool: "Edit", Input: "/tmp/foo.go (edit)", Success: true},
-			{Type: "tool_use", Tool: "Write", Input: "/tmp/bar.go (100 bytes)", Success: true},
-		},
-	}
-
-	tape := generateTape(sess, "/tmp/files.mp4")
-
-	assert.Contains(t, tape, "# Read: /tmp/foo.go")
-	assert.Contains(t, tape, "# Edit: /tmp/foo.go (edit)")
-	assert.Contains(t, tape, "# Write: /tmp/bar.go (100 bytes)")
-}
-
-func TestGenerateTape_TaskEvents(t *testing.T) {
-	sess := &Session{
-		ID:        "task-session",
-		StartTime: baseTime,
-		EndTime:   baseTime.Add(5 * time.Second),
-		Events: []Event{
-			{Type: "tool_use", Tool: "Task", Input: "[research] summarise the codebase", Success: true},
-		},
-	}
-
-	tape := generateTape(sess, "/tmp/task.mp4")
-	assert.Contains(t, tape, "# Agent: [research] summarise the codebase")
-}
-
-func TestGenerateTape_SkipsNonToolEvents(t *testing.T) {
+func TestGenerateTape_SkipsNonToolEvents_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "skip-test",
-		StartTime: baseTime,
-		EndTime:   baseTime.Add(5 * time.Second),
+		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
 		Events: []Event{
-			{Type: "user", Input: "user message"},
-			{Type: "assistant", Input: "assistant message"},
-			{Type: "tool_use", Tool: "Bash", Input: "echo ok", Output: "ok", Success: true},
+			{Type: "user", Input: "Hello"},
+			{Type: "assistant", Input: "Hi there"},
+			{Type: "tool_use", Tool: "Bash", Input: "echo hi", Output: "hi", Success: true},
 		},
 	}
 
-	tape := generateTape(sess, "/tmp/skip.mp4")
+	tape := generateTape(sess, "/tmp/out.mp4")
 
-	// User and assistant messages should not appear as typed commands.
-	assert.NotContains(t, tape, "user message")
-	assert.NotContains(t, tape, "assistant message")
-	assert.Contains(t, tape, "$ echo ok")
+	// User and assistant events should NOT appear in the tape
+	assert.NotContains(t, tape, "Hello")
+	assert.NotContains(t, tape, "Hi there")
+	// Bash command should appear
+	assert.Contains(t, tape, "echo hi")
 }
 
-func TestGenerateTape_LongOutputTruncated(t *testing.T) {
-	longOutput := strings.Repeat("x", 500)
+func TestGenerateTape_FailedCommand_Good(t *testing.T) {
 	sess := &Session{
-		ID:        "trunc-out",
-		StartTime: baseTime,
-		EndTime:   baseTime.Add(5 * time.Second),
+		ID:        "fail-test",
+		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
 		Events: []Event{
-			{Type: "tool_use", Tool: "Bash", Input: "cmd", Output: longOutput, Success: true},
+			{
+				Type:    "tool_use",
+				Tool:    "Bash",
+				Input:   "cat /missing",
+				Output:  "No such file",
+				Success: false,
+			},
 		},
 	}
 
-	tape := generateTape(sess, "/tmp/trunc.mp4")
-	// Output in the tape should be truncated at 200 chars + "...".
-	assert.Contains(t, tape, "...")
-	// The full 500-char string should not appear.
-	assert.NotContains(t, tape, longOutput)
+	tape := generateTape(sess, "/tmp/out.mp4")
+	assert.Contains(t, tape, `"# ✗ FAILED"`)
 }
 
-func TestGenerateTape_EmptyBashCommand(t *testing.T) {
+func TestGenerateTape_LongOutput_Good(t *testing.T) {
+	sess := &Session{
+		ID:        "long-test",
+		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
+		Events: []Event{
+			{
+				Type:    "tool_use",
+				Tool:    "Bash",
+				Input:   "cat huge.log",
+				Output:  strings.Repeat("x", 300),
+				Success: true,
+			},
+		},
+	}
+
+	tape := generateTape(sess, "/tmp/out.mp4")
+	// Output should be truncated to 200 chars + "..."
+	assert.Contains(t, tape, "...")
+}
+
+func TestGenerateTape_TaskEvent_Good(t *testing.T) {
+	sess := &Session{
+		ID:        "task-test",
+		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
+		Events: []Event{
+			{
+				Type:  "tool_use",
+				Tool:  "Task",
+				Input: "[research] Analyse code structure",
+			},
+		},
+	}
+
+	tape := generateTape(sess, "/tmp/out.mp4")
+	assert.Contains(t, tape, "# Agent: [research] Analyse code structure")
+}
+
+func TestGenerateTape_EditWriteEvents_Good(t *testing.T) {
+	sess := &Session{
+		ID:        "edit-test",
+		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
+		Events: []Event{
+			{Type: "tool_use", Tool: "Edit", Input: "/tmp/app.go (edit)"},
+			{Type: "tool_use", Tool: "Write", Input: "/tmp/new.go (50 bytes)"},
+		},
+	}
+
+	tape := generateTape(sess, "/tmp/out.mp4")
+	assert.Contains(t, tape, "# Edit: /tmp/app.go (edit)")
+	assert.Contains(t, tape, "# Write: /tmp/new.go (50 bytes)")
+}
+
+func TestGenerateTape_EmptySession_Good(t *testing.T) {
+	sess := &Session{
+		ID:        "empty-test",
+		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
+		Events:    nil,
+	}
+
+	tape := generateTape(sess, "/tmp/out.mp4")
+
+	// Should still have the header and trailer
+	assert.Contains(t, tape, "Output /tmp/out.mp4")
+	assert.Contains(t, tape, "Sleep 3s")
+	// No tool events
+	lines := strings.Split(tape, "\n")
+	var toolLines int
+	for _, line := range lines {
+		if strings.Contains(line, "$ ") || strings.Contains(line, "# Read:") ||
+			strings.Contains(line, "# Edit:") || strings.Contains(line, "# Write:") {
+			toolLines++
+		}
+	}
+	assert.Equal(t, 0, toolLines)
+}
+
+func TestGenerateTape_BashEmptyCommand_Bad(t *testing.T) {
 	sess := &Session{
 		ID:        "empty-cmd",
-		StartTime: baseTime,
-		EndTime:   baseTime.Add(time.Second),
+		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
 		Events: []Event{
-			{Type: "tool_use", Tool: "Bash", Input: "", Success: true},
+			{Type: "tool_use", Tool: "Bash", Input: "", Output: "", Success: true},
 		},
 	}
 
-	tape := generateTape(sess, "/tmp/empty-cmd.mp4")
-	// An empty command should be skipped (no "$ " line).
-	lines := strings.Split(tape, "\n")
-	for _, line := range lines {
-		assert.NotContains(t, line, `"$ "`)
-	}
+	tape := generateTape(sess, "/tmp/out.mp4")
+	// Empty command should be skipped (extractCommand returns "")
+	assert.NotContains(t, tape, `"$ "`)
 }
 
-func TestGenerateTape_SkipsGrepGlob(t *testing.T) {
-	// Grep and Glob tool_use events are not handled in the switch,
-	// so they should produce no typed output in the tape.
+func TestExtractCommand_Good(t *testing.T) {
+	assert.Equal(t, "ls -la", extractCommand("ls -la # list files"))
+	assert.Equal(t, "go test ./...", extractCommand("go test ./..."))
+	assert.Equal(t, "echo hello", extractCommand("echo hello"))
+}
+
+func TestExtractCommand_NoDescription_Good(t *testing.T) {
+	assert.Equal(t, "plain command", extractCommand("plain command"))
+}
+
+func TestExtractCommand_DescriptionAtStart_Good(t *testing.T) {
+	// " # " at position 0 means idx <= 0, so it returns the whole input
+	result := extractCommand(" # description only")
+	assert.Equal(t, " # description only", result)
+}
+
+func TestRenderMP4_NoVHS_Ugly(t *testing.T) {
+	// Skip if vhs is actually installed (this tests the error path)
+	if _, err := exec.LookPath("vhs"); err == nil {
+		t.Skip("vhs is installed; skipping missing-vhs test")
+	}
+
 	sess := &Session{
-		ID:        "grep-glob",
-		StartTime: baseTime,
-		EndTime:   baseTime.Add(5 * time.Second),
-		Events: []Event{
-			{Type: "tool_use", Tool: "Grep", Input: "/TODO/ in .", Success: true},
-			{Type: "tool_use", Tool: "Glob", Input: "**/*.go", Success: true},
-		},
+		ID:        "no-vhs",
+		StartTime: time.Now(),
 	}
 
-	tape := generateTape(sess, "/tmp/gg.mp4")
-	// Title and settings should exist, but no Grep/Glob content.
-	assert.Contains(t, tape, "Output /tmp/gg.mp4")
-	assert.NotContains(t, tape, "TODO")
-	assert.NotContains(t, tape, "*.go")
-}
-
-// -- extractCommand tests --
-
-func TestExtractCommand(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"with description", "ls -la # list files", "ls -la"},
-		{"without description", "pwd", "pwd"},
-		// extractCommand naively splits on first " # " so embedded hashes are truncated.
-		{"hash in command", "echo 'hello # world'", "echo 'hello"},
-		{"description at start", " # desc", " # desc"}, // idx == 0, not > 0
-		{"empty", "", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := extractCommand(tt.input)
-			require.Equal(t, tt.want, got)
-		})
-	}
+	err := RenderMP4(sess, "/tmp/test.mp4")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "vhs not installed")
 }

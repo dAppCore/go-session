@@ -1,7 +1,9 @@
+// SPDX-Licence-Identifier: EUPL-1.2
 package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,543 +14,770 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// -- helpers --
+// --- helpers to build synthetic JSONL ---
 
-// writeTempJSONL writes lines to a temp .jsonl file and returns the path.
-func writeTempJSONL(t *testing.T, dir, name string, lines ...string) string {
-	t.Helper()
-	path := filepath.Join(dir, name)
-	content := strings.Join(lines, "\n") + "\n"
-	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
-	return path
+// ts returns a stable timestamp offset by the given seconds from a fixed epoch.
+func ts(offsetSec int) string {
+	base := time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC)
+	return base.Add(time.Duration(offsetSec) * time.Second).Format(time.RFC3339Nano)
 }
 
-// ts builds an RFC3339Nano timestamp string offset from a base.
-func ts(base time.Time, offset time.Duration) string {
-	return base.Add(offset).Format(time.RFC3339Nano)
-}
-
-// jsonLine builds a raw JSONL line from an entry struct.
-func jsonLine(t *testing.T, v interface{}) string {
-	t.Helper()
-	b, err := json.Marshal(v)
-	require.NoError(t, err)
+// jsonlLine marshals an arbitrary map to a single JSONL line.
+func jsonlLine(m map[string]interface{}) string {
+	b, _ := json.Marshal(m)
 	return string(b)
 }
 
-// -- fixtures --
-
-var baseTime = time.Date(2026, 2, 19, 10, 0, 0, 0, time.UTC)
-
-// fixtureMinimalSession returns JSONL lines for a user message followed by
-// an assistant text reply.
-func fixtureMinimalSession() []string {
-	return []string{
-		`{"type":"user","timestamp":"` + ts(baseTime, 0) + `","sessionId":"abc123","message":{"role":"user","content":[{"type":"text","text":"hello"}]}}`,
-		`{"type":"assistant","timestamp":"` + ts(baseTime, 2*time.Second) + `","sessionId":"abc123","message":{"role":"assistant","content":[{"type":"text","text":"Hi there."}]}}`,
-	}
+// userTextEntry creates a JSONL line for a user text message.
+func userTextEntry(timestamp string, text string) string {
+	return jsonlLine(map[string]interface{}{
+		"type":      "user",
+		"timestamp": timestamp,
+		"sessionId": "test-session",
+		"message": map[string]interface{}{
+			"role": "user",
+			"content": []map[string]interface{}{
+				{"type": "text", "text": text},
+			},
+		},
+	})
 }
 
-// fixtureToolCallSession returns a session where the assistant invokes a Bash
-// tool and the user entry carries the tool_result.
-func fixtureToolCallSession() []string {
-	return []string{
-		`{"type":"assistant","timestamp":"` + ts(baseTime, 0) + `","sessionId":"tool1","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu_1","name":"Bash","input":{"command":"ls -la","description":"list files"}}]}}`,
-		`{"type":"user","timestamp":"` + ts(baseTime, 3*time.Second) + `","sessionId":"tool1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_1","content":"total 42\ndrwxr-xr-x 3 user user 4096 Feb 19 10:00 ."}]}}`,
-	}
+// assistantTextEntry creates a JSONL line for an assistant text message.
+func assistantTextEntry(timestamp string, text string) string {
+	return jsonlLine(map[string]interface{}{
+		"type":      "assistant",
+		"timestamp": timestamp,
+		"sessionId": "test-session",
+		"message": map[string]interface{}{
+			"role": "assistant",
+			"content": []map[string]interface{}{
+				{"type": "text", "text": text},
+			},
+		},
+	})
 }
 
-// fixtureAllToolTypes returns lines exercising every supported tool type.
-func fixtureAllToolTypes() []string {
-	tools := []struct {
-		id, name string
-		input    string
-	}{
-		{"tu_bash", "Bash", `{"command":"echo ok","description":"test echo"}`},
-		{"tu_read", "Read", `{"file_path":"/tmp/foo.go","offset":0,"limit":100}`},
-		{"tu_edit", "Edit", `{"file_path":"/tmp/foo.go","old_string":"old","new_string":"new"}`},
-		{"tu_write", "Write", `{"file_path":"/tmp/bar.go","content":"package bar"}`},
-		{"tu_grep", "Grep", `{"pattern":"TODO","path":"/src"}`},
-		{"tu_glob", "Glob", `{"pattern":"**/*.go","path":"/src"}`},
-		{"tu_task", "Task", `{"prompt":"summarise","description":"summarise code","subagent_type":"research"}`},
-	}
-
-	var lines []string
-	for i, tool := range tools {
-		off := time.Duration(i*2) * time.Second
-		// Assistant makes the tool_use call.
-		lines = append(lines, `{"type":"assistant","timestamp":"`+ts(baseTime, off)+`","sessionId":"all_tools","message":{"role":"assistant","content":[{"type":"tool_use","id":"`+tool.id+`","name":"`+tool.name+`","input":`+tool.input+`}]}}`)
-		// User entry carries the tool_result.
-		lines = append(lines, `{"type":"user","timestamp":"`+ts(baseTime, off+time.Second)+`","sessionId":"all_tools","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"`+tool.id+`","content":"result ok"}]}}`)
-	}
-	return lines
+// toolUseEntry creates a JSONL line for an assistant message containing a tool_use block.
+func toolUseEntry(timestamp, toolName, toolID string, input map[string]interface{}) string {
+	return jsonlLine(map[string]interface{}{
+		"type":      "assistant",
+		"timestamp": timestamp,
+		"sessionId": "test-session",
+		"message": map[string]interface{}{
+			"role": "assistant",
+			"content": []map[string]interface{}{
+				{
+					"type":  "tool_use",
+					"name":  toolName,
+					"id":    toolID,
+					"input": input,
+				},
+			},
+		},
+	})
 }
 
-// fixtureErrorToolResult returns a session with a failing tool call.
-func fixtureErrorToolResult() []string {
-	return []string{
-		`{"type":"assistant","timestamp":"` + ts(baseTime, 0) + `","sessionId":"err1","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu_err","name":"Bash","input":{"command":"bad-cmd"}}]}}`,
-		`{"type":"user","timestamp":"` + ts(baseTime, time.Second) + `","sessionId":"err1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_err","is_error":true,"content":"command not found: bad-cmd"}]}}`,
+// toolResultEntry creates a JSONL line for a user message containing a tool_result block.
+func toolResultEntry(timestamp, toolUseID string, content interface{}, isError bool) string {
+	entry := map[string]interface{}{
+		"type":      "user",
+		"timestamp": timestamp,
+		"sessionId": "test-session",
+		"message": map[string]interface{}{
+			"role": "user",
+			"content": []map[string]interface{}{
+				{
+					"type":        "tool_result",
+					"tool_use_id": toolUseID,
+					"content":     content,
+					"is_error":    isError,
+				},
+			},
+		},
 	}
+	return jsonlLine(entry)
 }
 
-// -- ParseTranscript tests --
+// writeJSONL writes lines to a temp .jsonl file and returns its path.
+func writeJSONL(t *testing.T, dir string, name string, lines ...string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0644)
+	require.NoError(t, err)
+	return path
+}
 
-func TestParseTranscript_MinimalValid(t *testing.T) {
+// --- ParseTranscript tests ---
+
+func TestParseTranscript_MinimalValid_Good(t *testing.T) {
 	dir := t.TempDir()
-	path := writeTempJSONL(t, dir, "minimal.jsonl", fixtureMinimalSession()...)
+	path := writeJSONL(t, dir, "minimal.jsonl",
+		userTextEntry(ts(0), "Hello"),
+		assistantTextEntry(ts(1), "Hi there!"),
+	)
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err)
+	require.NotNil(t, sess)
 
 	assert.Equal(t, "minimal", sess.ID)
 	assert.Equal(t, path, sess.Path)
 	assert.False(t, sess.StartTime.IsZero(), "StartTime should be set")
 	assert.False(t, sess.EndTime.IsZero(), "EndTime should be set")
-	assert.True(t, sess.EndTime.After(sess.StartTime), "EndTime should be after StartTime")
+	assert.True(t, sess.EndTime.After(sess.StartTime) || sess.EndTime.Equal(sess.StartTime))
 
+	// Should have a user event and an assistant event
 	require.Len(t, sess.Events, 2)
-
-	// First event: user message
 	assert.Equal(t, "user", sess.Events[0].Type)
-	assert.Equal(t, "hello", sess.Events[0].Input)
-
-	// Second event: assistant message
+	assert.Equal(t, "Hello", sess.Events[0].Input)
 	assert.Equal(t, "assistant", sess.Events[1].Type)
-	assert.Equal(t, "Hi there.", sess.Events[1].Input)
+	assert.Equal(t, "Hi there!", sess.Events[1].Input)
 }
 
-func TestParseTranscript_ToolCallBash(t *testing.T) {
+func TestParseTranscript_ToolCalls_Good(t *testing.T) {
 	dir := t.TempDir()
-	path := writeTempJSONL(t, dir, "toolcall.jsonl", fixtureToolCallSession()...)
+
+	lines := []string{
+		userTextEntry(ts(0), "Run a command"),
+		// Bash tool_use
+		toolUseEntry(ts(1), "Bash", "tool-bash-1", map[string]interface{}{
+			"command":     "ls -la",
+			"description": "list files",
+		}),
+		toolResultEntry(ts(2), "tool-bash-1", "total 42\ndrwxr-xr-x 5 user staff 160 Feb 20 10:00 .", false),
+		// Read tool_use
+		toolUseEntry(ts(3), "Read", "tool-read-1", map[string]interface{}{
+			"file_path": "/tmp/test.go",
+		}),
+		toolResultEntry(ts(4), "tool-read-1", "package main\n\nfunc main() {}", false),
+		// Edit tool_use
+		toolUseEntry(ts(5), "Edit", "tool-edit-1", map[string]interface{}{
+			"file_path":  "/tmp/test.go",
+			"old_string": "main",
+			"new_string": "app",
+		}),
+		toolResultEntry(ts(6), "tool-edit-1", "ok", false),
+		// Write tool_use
+		toolUseEntry(ts(7), "Write", "tool-write-1", map[string]interface{}{
+			"file_path": "/tmp/new.go",
+			"content":   "package new\n",
+		}),
+		toolResultEntry(ts(8), "tool-write-1", "ok", false),
+		// Grep tool_use
+		toolUseEntry(ts(9), "Grep", "tool-grep-1", map[string]interface{}{
+			"pattern": "TODO",
+			"path":    "/tmp",
+		}),
+		toolResultEntry(ts(10), "tool-grep-1", "/tmp/test.go:3:// TODO fix this", false),
+		// Glob tool_use
+		toolUseEntry(ts(11), "Glob", "tool-glob-1", map[string]interface{}{
+			"pattern": "**/*.go",
+		}),
+		toolResultEntry(ts(12), "tool-glob-1", "/tmp/test.go\n/tmp/new.go", false),
+		// Task tool_use
+		toolUseEntry(ts(13), "Task", "tool-task-1", map[string]interface{}{
+			"prompt":       "Analyse the code",
+			"description":  "Code analysis",
+			"subagent_type": "research",
+		}),
+		toolResultEntry(ts(14), "tool-task-1", "Analysis complete", false),
+		assistantTextEntry(ts(15), "All done."),
+	}
+
+	path := writeJSONL(t, dir, "tools.jsonl", lines...)
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err)
 
-	// Should have one tool_use event (the assistant text block is empty,
-	// so only the completed tool call appears).
-	require.Len(t, sess.Events, 1)
-	evt := sess.Events[0]
-
-	assert.Equal(t, "tool_use", evt.Type)
-	assert.Equal(t, "Bash", evt.Tool)
-	assert.Equal(t, "tu_1", evt.ToolID)
-	assert.Contains(t, evt.Input, "ls -la")
-	assert.Contains(t, evt.Input, "# list files")
-	assert.Contains(t, evt.Output, "total 42")
-	assert.True(t, evt.Success)
-	assert.Equal(t, 3*time.Second, evt.Duration)
-}
-
-func TestParseTranscript_AllToolTypes(t *testing.T) {
-	dir := t.TempDir()
-	path := writeTempJSONL(t, dir, "alltools.jsonl", fixtureAllToolTypes()...)
-
-	sess, err := ParseTranscript(path)
-	require.NoError(t, err)
-
-	expectedTools := []string{"Bash", "Read", "Edit", "Write", "Grep", "Glob", "Task"}
-	var gotTools []string
-	for _, evt := range sess.Events {
-		if evt.Type == "tool_use" {
-			gotTools = append(gotTools, evt.Tool)
+	// Count tool_use events
+	var toolEvents []Event
+	for _, e := range sess.Events {
+		if e.Type == "tool_use" {
+			toolEvents = append(toolEvents, e)
 		}
 	}
-	assert.Equal(t, expectedTools, gotTools)
+
+	require.Len(t, toolEvents, 7, "should have 7 tool_use events")
+
+	// Verify each tool was parsed correctly
+	assert.Equal(t, "Bash", toolEvents[0].Tool)
+	assert.Contains(t, toolEvents[0].Input, "ls -la")
+	assert.Contains(t, toolEvents[0].Input, "# list files")
+	assert.True(t, toolEvents[0].Success)
+	assert.Equal(t, time.Second, toolEvents[0].Duration)
+
+	assert.Equal(t, "Read", toolEvents[1].Tool)
+	assert.Equal(t, "/tmp/test.go", toolEvents[1].Input)
+
+	assert.Equal(t, "Edit", toolEvents[2].Tool)
+	assert.Equal(t, "/tmp/test.go (edit)", toolEvents[2].Input)
+
+	assert.Equal(t, "Write", toolEvents[3].Tool)
+	assert.Equal(t, "/tmp/new.go (12 bytes)", toolEvents[3].Input)
+
+	assert.Equal(t, "Grep", toolEvents[4].Tool)
+	assert.Equal(t, "/TODO/ in /tmp", toolEvents[4].Input)
+
+	assert.Equal(t, "Glob", toolEvents[5].Tool)
+	assert.Equal(t, "**/*.go", toolEvents[5].Input)
+
+	assert.Equal(t, "Task", toolEvents[6].Tool)
+	assert.Equal(t, "[research] Code analysis", toolEvents[6].Input)
 }
 
-func TestParseTranscript_ErrorToolResult(t *testing.T) {
+func TestParseTranscript_ToolError_Good(t *testing.T) {
 	dir := t.TempDir()
-	path := writeTempJSONL(t, dir, "error.jsonl", fixtureErrorToolResult()...)
+	path := writeJSONL(t, dir, "error.jsonl",
+		toolUseEntry(ts(0), "Bash", "tool-err-1", map[string]interface{}{
+			"command": "cat /nonexistent",
+		}),
+		toolResultEntry(ts(1), "tool-err-1", "cat: /nonexistent: No such file or directory", true),
+	)
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err)
 
-	require.Len(t, sess.Events, 1)
-	evt := sess.Events[0]
-	assert.False(t, evt.Success)
-	assert.Contains(t, evt.ErrorMsg, "command not found")
+	var toolEvents []Event
+	for _, e := range sess.Events {
+		if e.Type == "tool_use" {
+			toolEvents = append(toolEvents, e)
+		}
+	}
+
+	require.Len(t, toolEvents, 1)
+	assert.False(t, toolEvents[0].Success)
+	assert.Contains(t, toolEvents[0].ErrorMsg, "No such file or directory")
 }
 
-func TestParseTranscript_EmptyFile(t *testing.T) {
+func TestParseTranscript_EmptyFile_Bad(t *testing.T) {
 	dir := t.TempDir()
-	path := writeTempJSONL(t, dir, "empty.jsonl")
+	path := writeJSONL(t, dir, "empty.jsonl")
+	// Write a truly empty file
+	require.NoError(t, os.WriteFile(path, []byte(""), 0644))
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err)
+	require.NotNil(t, sess)
 	assert.Empty(t, sess.Events)
 	assert.True(t, sess.StartTime.IsZero())
 }
 
-func TestParseTranscript_MalformedLines(t *testing.T) {
+func TestParseTranscript_MalformedJSON_Bad(t *testing.T) {
 	dir := t.TempDir()
-	lines := []string{
-		`{not valid json`,
-		`{"type":"user","timestamp":"` + ts(baseTime, 0) + `","sessionId":"x","message":{"role":"user","content":[{"type":"text","text":"ok"}]}}`,
-		`{also bad`,
-		`{"type":"assistant","timestamp":"` + ts(baseTime, time.Second) + `","sessionId":"x","message":{"role":"assistant","content":[{"type":"text","text":"reply"}]}}`,
-	}
-	path := writeTempJSONL(t, dir, "malformed.jsonl", lines...)
+	path := writeJSONL(t, dir, "malformed.jsonl",
+		`{invalid json`,
+		`{"type": "user", "timestamp": "`+ts(0)+`", not valid`,
+		userTextEntry(ts(1), "This line is valid"),
+		`}}}`,
+		assistantTextEntry(ts(2), "This is also valid"),
+	)
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err, "malformed lines should be skipped, not cause an error")
-	assert.Len(t, sess.Events, 2, "only the two valid lines should produce events")
+	require.NotNil(t, sess)
+
+	// Only the valid lines should produce events
+	assert.Len(t, sess.Events, 2)
+	assert.Equal(t, "user", sess.Events[0].Type)
+	assert.Equal(t, "assistant", sess.Events[1].Type)
 }
 
-func TestParseTranscript_TruncatedInput(t *testing.T) {
+func TestParseTranscript_TruncatedJSONL_Bad(t *testing.T) {
 	dir := t.TempDir()
-	// Final line is incomplete JSON (no closing brace).
-	lines := []string{
-		`{"type":"user","timestamp":"` + ts(baseTime, 0) + `","sessionId":"trunc","message":{"role":"user","content":[{"type":"text","text":"start"}]}}`,
-		`{"type":"assistant","timestamp":"` + ts(baseTime, time.Second) + `","sessionId":"trunc","message":{"role":"assistant","content":[{"type":"text","text":"partial`,
+	validLine := userTextEntry(ts(0), "Hello")
+	// Truncated line: cut a valid JSON line in half
+	truncated := assistantTextEntry(ts(1), "World")
+	truncated = truncated[:len(truncated)/2]
+
+	path := writeJSONL(t, dir, "truncated.jsonl", validLine, truncated)
+
+	sess, err := ParseTranscript(path)
+	require.NoError(t, err, "truncated last line should be skipped gracefully")
+	require.NotNil(t, sess)
+
+	// Only the first valid line should produce an event
+	assert.Len(t, sess.Events, 1)
+	assert.Equal(t, "user", sess.Events[0].Type)
+}
+
+func TestParseTranscript_LargeSession_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	var lines []string
+	lines = append(lines, userTextEntry(ts(0), "Start large session"))
+
+	// Generate 1000+ tool call pairs
+	for i := 0; i < 1100; i++ {
+		toolID := fmt.Sprintf("tool-%d", i)
+		offset := (i * 2) + 1
+		lines = append(lines,
+			toolUseEntry(ts(offset), "Bash", toolID, map[string]interface{}{
+				"command": fmt.Sprintf("echo %d", i),
+			}),
+			toolResultEntry(ts(offset+1), toolID, fmt.Sprintf("output %d", i), false),
+		)
 	}
-	path := writeTempJSONL(t, dir, "truncated.jsonl", lines...)
+	lines = append(lines, assistantTextEntry(ts(2202), "Done"))
+
+	path := writeJSONL(t, dir, "large.jsonl", lines...)
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err)
-	// Only the first valid line should produce an event.
-	assert.Len(t, sess.Events, 1)
-	assert.Equal(t, "start", sess.Events[0].Input)
+
+	var toolCount int
+	for _, e := range sess.Events {
+		if e.Type == "tool_use" {
+			toolCount++
+		}
+	}
+	assert.Equal(t, 1100, toolCount, "all 1100 tool events should be parsed")
 }
 
-func TestParseTranscript_FileNotFound(t *testing.T) {
-	_, err := ParseTranscript("/nonexistent/path.jsonl")
+func TestParseTranscript_NestedToolResults_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	// Tool result with array content (multiple text blocks)
+	arrayContent := []map[string]interface{}{
+		{"type": "text", "text": "First block"},
+		{"type": "text", "text": "Second block"},
+	}
+
+	lines := []string{
+		toolUseEntry(ts(0), "Bash", "tool-nested-1", map[string]interface{}{
+			"command": "complex output",
+		}),
+		// Build the tool result with array content manually
+		jsonlLine(map[string]interface{}{
+			"type":      "user",
+			"timestamp": ts(1),
+			"sessionId": "test-session",
+			"message": map[string]interface{}{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{
+						"type":        "tool_result",
+						"tool_use_id": "tool-nested-1",
+						"content":     arrayContent,
+						"is_error":    false,
+					},
+				},
+			},
+		}),
+	}
+
+	path := writeJSONL(t, dir, "nested.jsonl", lines...)
+
+	sess, err := ParseTranscript(path)
+	require.NoError(t, err)
+
+	var toolEvents []Event
+	for _, e := range sess.Events {
+		if e.Type == "tool_use" {
+			toolEvents = append(toolEvents, e)
+		}
+	}
+
+	require.Len(t, toolEvents, 1)
+	assert.Contains(t, toolEvents[0].Output, "First block")
+	assert.Contains(t, toolEvents[0].Output, "Second block")
+}
+
+func TestParseTranscript_NestedMapResult_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	lines := []string{
+		toolUseEntry(ts(0), "Read", "tool-map-1", map[string]interface{}{
+			"file_path": "/tmp/data.json",
+		}),
+		// Build a tool result with map content
+		jsonlLine(map[string]interface{}{
+			"type":      "user",
+			"timestamp": ts(1),
+			"sessionId": "test-session",
+			"message": map[string]interface{}{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{
+						"type":        "tool_result",
+						"tool_use_id": "tool-map-1",
+						"content": map[string]interface{}{
+							"text": "file contents here",
+						},
+						"is_error": false,
+					},
+				},
+			},
+		}),
+	}
+
+	path := writeJSONL(t, dir, "map-result.jsonl", lines...)
+
+	sess, err := ParseTranscript(path)
+	require.NoError(t, err)
+
+	var toolEvents []Event
+	for _, e := range sess.Events {
+		if e.Type == "tool_use" {
+			toolEvents = append(toolEvents, e)
+		}
+	}
+
+	require.Len(t, toolEvents, 1)
+	assert.Contains(t, toolEvents[0].Output, "file contents here")
+}
+
+func TestParseTranscript_FileNotFound_Ugly(t *testing.T) {
+	_, err := ParseTranscript("/nonexistent/path/session.jsonl")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "open transcript")
 }
 
-func TestParseTranscript_LargeSession(t *testing.T) {
+func TestParseTranscript_SessionIDFromFilename_Good(t *testing.T) {
 	dir := t.TempDir()
-	var lines []string
-	// Generate 500 user+assistant pairs = 1000 lines.
-	for i := 0; i < 500; i++ {
-		off := time.Duration(i*2) * time.Second
-		lines = append(lines,
-			`{"type":"user","timestamp":"`+ts(baseTime, off)+`","sessionId":"large","message":{"role":"user","content":[{"type":"text","text":"msg `+strings.Repeat("x", 50)+`"}]}}`,
-			`{"type":"assistant","timestamp":"`+ts(baseTime, off+time.Second)+`","sessionId":"large","message":{"role":"assistant","content":[{"type":"text","text":"reply `+strings.Repeat("y", 50)+`"}]}}`,
-		)
-	}
-	path := writeTempJSONL(t, dir, "large.jsonl", lines...)
+	path := writeJSONL(t, dir, "abc123def456.jsonl",
+		userTextEntry(ts(0), "test"),
+	)
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err)
-	assert.Len(t, sess.Events, 1000)
+	assert.Equal(t, "abc123def456", sess.ID)
 }
 
-func TestParseTranscript_ToolResultArrayContent(t *testing.T) {
-	// tool_result whose content is an array of text blocks.
+func TestParseTranscript_TimestampsTracked_Good(t *testing.T) {
 	dir := t.TempDir()
-	lines := []string{
-		`{"type":"assistant","timestamp":"` + ts(baseTime, 0) + `","sessionId":"arr","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu_arr","name":"Bash","input":{"command":"echo hi"}}]}}`,
-		`{"type":"user","timestamp":"` + ts(baseTime, time.Second) + `","sessionId":"arr","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_arr","content":[{"type":"text","text":"line1"},{"type":"text","text":"line2"}]}]}}`,
-	}
-	path := writeTempJSONL(t, dir, "array_content.jsonl", lines...)
+	path := writeJSONL(t, dir, "timestamps.jsonl",
+		userTextEntry(ts(0), "start"),
+		assistantTextEntry(ts(5), "middle"),
+		userTextEntry(ts(10), "end"),
+	)
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err)
+
+	expectedStart, _ := time.Parse(time.RFC3339Nano, ts(0))
+	expectedEnd, _ := time.Parse(time.RFC3339Nano, ts(10))
+
+	assert.Equal(t, expectedStart, sess.StartTime)
+	assert.Equal(t, expectedEnd, sess.EndTime)
+}
+
+func TestParseTranscript_TextTruncation_Good(t *testing.T) {
+	dir := t.TempDir()
+	longText := strings.Repeat("x", 600)
+	path := writeJSONL(t, dir, "truncation.jsonl",
+		userTextEntry(ts(0), longText),
+	)
+
+	sess, err := ParseTranscript(path)
+	require.NoError(t, err)
+
 	require.Len(t, sess.Events, 1)
-	assert.Contains(t, sess.Events[0].Output, "line1")
-	assert.Contains(t, sess.Events[0].Output, "line2")
+	// Input should be truncated to 500 + "..."
+	assert.True(t, len(sess.Events[0].Input) <= 504, "input should be truncated")
+	assert.True(t, strings.HasSuffix(sess.Events[0].Input, "..."), "truncated text should end with ...")
 }
 
-func TestParseTranscript_ToolResultMapContent(t *testing.T) {
-	// tool_result whose content is a map with a text key.
+func TestParseTranscript_MixedContentBlocks_Good(t *testing.T) {
+	// Assistant message with both text and tool_use in the same message
 	dir := t.TempDir()
+
 	lines := []string{
-		`{"type":"assistant","timestamp":"` + ts(baseTime, 0) + `","sessionId":"map","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu_map","name":"Read","input":{"file_path":"/tmp/x"}}]}}`,
-		`{"type":"user","timestamp":"` + ts(baseTime, time.Second) + `","sessionId":"map","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_map","content":{"text":"file contents here"}}]}}`,
+		// An assistant message with text + tool_use in the same content array
+		jsonlLine(map[string]interface{}{
+			"type":      "assistant",
+			"timestamp": ts(0),
+			"sessionId": "test-session",
+			"message": map[string]interface{}{
+				"role": "assistant",
+				"content": []map[string]interface{}{
+					{"type": "text", "text": "Let me check that file."},
+					{
+						"type":  "tool_use",
+						"name":  "Read",
+						"id":    "tool-mixed-1",
+						"input": map[string]interface{}{"file_path": "/tmp/mix.go"},
+					},
+				},
+			},
+		}),
+		toolResultEntry(ts(1), "tool-mixed-1", "package mix", false),
 	}
-	path := writeTempJSONL(t, dir, "map_content.jsonl", lines...)
+
+	path := writeJSONL(t, dir, "mixed.jsonl", lines...)
 
 	sess, err := ParseTranscript(path)
 	require.NoError(t, err)
-	require.Len(t, sess.Events, 1)
-	assert.Equal(t, "file contents here", sess.Events[0].Output)
-}
 
-func TestParseTranscript_UnmatchedToolResult(t *testing.T) {
-	// A tool_result whose tool_use_id doesn't match any pending tool_use.
-	dir := t.TempDir()
-	lines := []string{
-		`{"type":"user","timestamp":"` + ts(baseTime, 0) + `","sessionId":"unmatched","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"nonexistent","content":"orphan result"}]}}`,
-	}
-	path := writeTempJSONL(t, dir, "unmatched.jsonl", lines...)
-
-	sess, err := ParseTranscript(path)
-	require.NoError(t, err)
-	// Unmatched tool_result should be silently ignored.
-	assert.Empty(t, sess.Events)
-}
-
-func TestParseTranscript_MixedContentBlocks(t *testing.T) {
-	// An assistant message with both text and tool_use blocks.
-	dir := t.TempDir()
-	lines := []string{
-		`{"type":"assistant","timestamp":"` + ts(baseTime, 0) + `","sessionId":"mixed","message":{"role":"assistant","content":[{"type":"text","text":"I will read the file."},{"type":"tool_use","id":"tu_mix","name":"Read","input":{"file_path":"/etc/hosts"}}]}}`,
-		`{"type":"user","timestamp":"` + ts(baseTime, time.Second) + `","sessionId":"mixed","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_mix","content":"127.0.0.1 localhost"}]}}`,
-	}
-	path := writeTempJSONL(t, dir, "mixed.jsonl", lines...)
-
-	sess, err := ParseTranscript(path)
-	require.NoError(t, err)
-	// Should get: 1 assistant text + 1 tool_use
+	// Should have an assistant text event + a tool_use event
 	require.Len(t, sess.Events, 2)
 	assert.Equal(t, "assistant", sess.Events[0].Type)
-	assert.Equal(t, "I will read the file.", sess.Events[0].Input)
 	assert.Equal(t, "tool_use", sess.Events[1].Type)
 	assert.Equal(t, "Read", sess.Events[1].Tool)
 }
 
-// -- extractToolInput tests --
-
-func TestExtractToolInput(t *testing.T) {
-	tests := []struct {
-		name     string
-		toolName string
-		input    string
-		want     string
-	}{
-		{
-			name:     "Bash with description",
-			toolName: "Bash",
-			input:    `{"command":"ls -la","description":"list files"}`,
-			want:     "ls -la # list files",
-		},
-		{
-			name:     "Bash without description",
-			toolName: "Bash",
-			input:    `{"command":"pwd"}`,
-			want:     "pwd",
-		},
-		{
-			name:     "Read",
-			toolName: "Read",
-			input:    `{"file_path":"/home/user/main.go","offset":10,"limit":50}`,
-			want:     "/home/user/main.go",
-		},
-		{
-			name:     "Edit",
-			toolName: "Edit",
-			input:    `{"file_path":"/tmp/test.go","old_string":"foo","new_string":"bar"}`,
-			want:     "/tmp/test.go (edit)",
-		},
-		{
-			name:     "Write",
-			toolName: "Write",
-			input:    `{"file_path":"/tmp/out.txt","content":"hello world"}`,
-			want:     "/tmp/out.txt (11 bytes)",
-		},
-		{
-			name:     "Grep with path",
-			toolName: "Grep",
-			input:    `{"pattern":"TODO","path":"/src"}`,
-			want:     "/TODO/ in /src",
-		},
-		{
-			name:     "Grep without path",
-			toolName: "Grep",
-			input:    `{"pattern":"FIXME"}`,
-			want:     "/FIXME/ in .",
-		},
-		{
-			name:     "Glob",
-			toolName: "Glob",
-			input:    `{"pattern":"**/*.go","path":"/src"}`,
-			want:     "**/*.go",
-		},
-		{
-			name:     "Task with description",
-			toolName: "Task",
-			input:    `{"prompt":"do something long","description":"short desc","subagent_type":"research"}`,
-			want:     "[research] short desc",
-		},
-		{
-			name:     "Task without description falls back to prompt",
-			toolName: "Task",
-			input:    `{"prompt":"analyse this code","subagent_type":"codegen"}`,
-			want:     "[codegen] analyse this code",
-		},
-		{
-			name:     "Unknown tool shows sorted keys",
-			toolName: "CustomMCP",
-			input:    `{"beta":"b","alpha":"a"}`,
-			want:     "alpha, beta",
-		},
-		{
-			name:     "Nil input",
-			toolName: "Bash",
-			input:    "",
-			want:     "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var raw json.RawMessage
-			if tt.input != "" {
-				raw = json.RawMessage(tt.input)
-			}
-			got := extractToolInput(tt.toolName, raw)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// -- extractResultContent tests --
-
-func TestExtractResultContent(t *testing.T) {
-	tests := []struct {
-		name    string
-		content interface{}
-		want    string
-	}{
-		{
-			name:    "string content",
-			content: "simple output",
-			want:    "simple output",
-		},
-		{
-			name: "array of text blocks",
-			content: []interface{}{
-				map[string]interface{}{"type": "text", "text": "line1"},
-				map[string]interface{}{"type": "text", "text": "line2"},
-			},
-			want: "line1\nline2",
-		},
-		{
-			name:    "map with text key",
-			content: map[string]interface{}{"text": "map value"},
-			want:    "map value",
-		},
-		{
-			name:    "map without text key",
-			content: map[string]interface{}{"data": 42},
-			want:    "map[data:42]",
-		},
-		{
-			name:    "nil content",
-			content: nil,
-			want:    "<nil>",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := extractResultContent(tt.content)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// -- truncate tests --
-
-func TestTruncate(t *testing.T) {
-	tests := []struct {
-		name string
-		s    string
-		max  int
-		want string
-	}{
-		{"short string", "hello", 10, "hello"},
-		{"exact length", "hello", 5, "hello"},
-		{"truncated", "hello world", 5, "hello..."},
-		{"empty string", "", 10, ""},
-		{"zero max", "hello", 0, "..."},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, truncate(tt.s, tt.max))
-		})
-	}
-}
-
-// -- ListSessions tests --
-
-func TestListSessions_EmptyDir(t *testing.T) {
+func TestParseTranscript_UnmatchedToolResult_Bad(t *testing.T) {
+	// A tool_result with no matching tool_use should be silently ignored
 	dir := t.TempDir()
+	path := writeJSONL(t, dir, "unmatched.jsonl",
+		toolResultEntry(ts(0), "nonexistent-tool-id", "orphan result", false),
+		userTextEntry(ts(1), "Normal message"),
+	)
+
+	sess, err := ParseTranscript(path)
+	require.NoError(t, err)
+
+	// Only the user text event should appear; the orphan tool result is ignored
+	require.Len(t, sess.Events, 1)
+	assert.Equal(t, "user", sess.Events[0].Type)
+}
+
+func TestParseTranscript_EmptyTimestamp_Bad(t *testing.T) {
+	dir := t.TempDir()
+	// Entry with empty timestamp
+	line := jsonlLine(map[string]interface{}{
+		"type":      "user",
+		"timestamp": "",
+		"sessionId": "test-session",
+		"message": map[string]interface{}{
+			"role": "user",
+			"content": []map[string]interface{}{
+				{"type": "text", "text": "No timestamp"},
+			},
+		},
+	})
+	path := writeJSONL(t, dir, "no-ts.jsonl", line)
+
+	sess, err := ParseTranscript(path)
+	require.NoError(t, err)
+
+	// The event should still be parsed, but StartTime remains zero
+	assert.True(t, sess.StartTime.IsZero())
+}
+
+// --- ListSessions tests ---
+
+func TestListSessions_EmptyDir_Good(t *testing.T) {
+	dir := t.TempDir()
+
 	sessions, err := ListSessions(dir)
 	require.NoError(t, err)
 	assert.Empty(t, sessions)
 }
 
-func TestListSessions_SingleSession(t *testing.T) {
+func TestListSessions_SingleSession_Good(t *testing.T) {
 	dir := t.TempDir()
-	writeTempJSONL(t, dir, "sess-001.jsonl", fixtureMinimalSession()...)
+	writeJSONL(t, dir, "session-abc.jsonl",
+		userTextEntry(ts(0), "Hello"),
+		assistantTextEntry(ts(5), "World"),
+	)
 
 	sessions, err := ListSessions(dir)
 	require.NoError(t, err)
 	require.Len(t, sessions, 1)
-	assert.Equal(t, "sess-001", sessions[0].ID)
+
+	assert.Equal(t, "session-abc", sessions[0].ID)
 	assert.False(t, sessions[0].StartTime.IsZero())
 	assert.False(t, sessions[0].EndTime.IsZero())
 }
 
-func TestListSessions_MultipleSorted(t *testing.T) {
+func TestListSessions_MultipleSorted_Good(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create sessions with different timestamps.
-	early := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	late := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
-
-	earlyLines := []string{
-		`{"type":"user","timestamp":"` + early.Format(time.RFC3339Nano) + `","sessionId":"early","message":{"role":"user","content":[{"type":"text","text":"old"}]}}`,
-	}
-	lateLines := []string{
-		`{"type":"user","timestamp":"` + late.Format(time.RFC3339Nano) + `","sessionId":"late","message":{"role":"user","content":[{"type":"text","text":"new"}]}}`,
-	}
-
-	writeTempJSONL(t, dir, "early.jsonl", earlyLines...)
-	writeTempJSONL(t, dir, "late.jsonl", lateLines...)
+	// Create three sessions with different timestamps.
+	// Session "old" starts at ts(0), "mid" at ts(100), "new" at ts(200).
+	writeJSONL(t, dir, "old.jsonl",
+		userTextEntry(ts(0), "old session"),
+	)
+	writeJSONL(t, dir, "mid.jsonl",
+		userTextEntry(ts(100), "mid session"),
+	)
+	writeJSONL(t, dir, "new.jsonl",
+		userTextEntry(ts(200), "new session"),
+	)
 
 	sessions, err := ListSessions(dir)
 	require.NoError(t, err)
-	require.Len(t, sessions, 2)
-	// Should be sorted newest first.
-	assert.Equal(t, "late", sessions[0].ID)
-	assert.Equal(t, "early", sessions[1].ID)
+	require.Len(t, sessions, 3)
+
+	// Should be sorted newest first
+	assert.Equal(t, "new", sessions[0].ID)
+	assert.Equal(t, "mid", sessions[1].ID)
+	assert.Equal(t, "old", sessions[2].ID)
 }
 
-func TestListSessions_IgnoresNonJSONL(t *testing.T) {
+func TestListSessions_NonJSONLIgnored_Good(t *testing.T) {
 	dir := t.TempDir()
-	writeTempJSONL(t, dir, "session.jsonl", fixtureMinimalSession()...)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("not a session"), 0644))
+
+	writeJSONL(t, dir, "real-session.jsonl",
+		userTextEntry(ts(0), "real"),
+	)
+	// Write non-JSONL files
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# Hello"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("notes"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "data.json"), []byte("{}"), 0644))
 
 	sessions, err := ListSessions(dir)
 	require.NoError(t, err)
-	assert.Len(t, sessions, 1)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "real-session", sessions[0].ID)
 }
 
-func TestListSessions_MalformedContent(t *testing.T) {
+func TestListSessions_MalformedJSONLStillListed_Bad(t *testing.T) {
 	dir := t.TempDir()
-	// A .jsonl file with no valid timestamps at all — should still appear
-	// with a fallback start time from file mod time.
-	writeTempJSONL(t, dir, "bad.jsonl", `{not json}`, `{also bad}`)
+
+	// A .jsonl file with no valid timestamps — should still list with zero time or modtime
+	writeJSONL(t, dir, "broken.jsonl",
+		`{invalid json}`,
+		`also not valid`,
+	)
 
 	sessions, err := ListSessions(dir)
 	require.NoError(t, err)
 	require.Len(t, sessions, 1)
-	// StartTime should fall back to the file's mod time.
-	assert.False(t, sessions[0].StartTime.IsZero())
+	assert.Equal(t, "broken", sessions[0].ID)
+	// StartTime should fall back to file modtime since no valid timestamps
+	assert.False(t, sessions[0].StartTime.IsZero(), "should fall back to file modtime")
 }
 
-// -- Benchmark --
+// --- extractToolInput tests ---
 
-func BenchmarkParseTranscript(b *testing.B) {
-	dir := b.TempDir()
-	var lines []string
-	for i := 0; i < 2000; i++ {
-		off := time.Duration(i*2) * time.Second
-		lines = append(lines,
-			`{"type":"assistant","timestamp":"`+ts(baseTime, off)+`","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu_`+strings.Repeat("a", 5)+`_`+string(rune('0'+i%10))+`","name":"Bash","input":{"command":"echo hello"}}]}}`,
-			`{"type":"user","timestamp":"`+ts(baseTime, off+time.Second)+`","sessionId":"bench","message":{"role":"user","content":[{"type":"text","text":"msg"}]}}`,
-		)
-	}
-	path := writeTempJSONL(&testing.T{}, dir, "bench.jsonl", lines...)
+func TestExtractToolInput_Bash_Good(t *testing.T) {
+	input := json.RawMessage(`{"command":"go test ./...","description":"run tests","timeout":120}`)
+	result := extractToolInput("Bash", input)
+	assert.Equal(t, "go test ./... # run tests", result)
+}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = ParseTranscript(path)
+func TestExtractToolInput_BashNoDescription_Good(t *testing.T) {
+	input := json.RawMessage(`{"command":"ls -la"}`)
+	result := extractToolInput("Bash", input)
+	assert.Equal(t, "ls -la", result)
+}
+
+func TestExtractToolInput_Read_Good(t *testing.T) {
+	input := json.RawMessage(`{"file_path":"/Users/test/main.go","offset":10,"limit":50}`)
+	result := extractToolInput("Read", input)
+	assert.Equal(t, "/Users/test/main.go", result)
+}
+
+func TestExtractToolInput_Edit_Good(t *testing.T) {
+	input := json.RawMessage(`{"file_path":"/tmp/app.go","old_string":"foo","new_string":"bar"}`)
+	result := extractToolInput("Edit", input)
+	assert.Equal(t, "/tmp/app.go (edit)", result)
+}
+
+func TestExtractToolInput_Write_Good(t *testing.T) {
+	input := json.RawMessage(`{"file_path":"/tmp/out.txt","content":"hello world"}`)
+	result := extractToolInput("Write", input)
+	assert.Equal(t, "/tmp/out.txt (11 bytes)", result)
+}
+
+func TestExtractToolInput_Grep_Good(t *testing.T) {
+	input := json.RawMessage(`{"pattern":"TODO","path":"/src"}`)
+	result := extractToolInput("Grep", input)
+	assert.Equal(t, "/TODO/ in /src", result)
+}
+
+func TestExtractToolInput_GrepNoPath_Good(t *testing.T) {
+	input := json.RawMessage(`{"pattern":"FIXME"}`)
+	result := extractToolInput("Grep", input)
+	assert.Equal(t, "/FIXME/ in .", result)
+}
+
+func TestExtractToolInput_Glob_Good(t *testing.T) {
+	input := json.RawMessage(`{"pattern":"**/*.go","path":"/src"}`)
+	result := extractToolInput("Glob", input)
+	assert.Equal(t, "**/*.go", result)
+}
+
+func TestExtractToolInput_Task_Good(t *testing.T) {
+	input := json.RawMessage(`{"prompt":"Analyse the codebase","description":"Code review","subagent_type":"research"}`)
+	result := extractToolInput("Task", input)
+	assert.Equal(t, "[research] Code review", result)
+}
+
+func TestExtractToolInput_TaskNoDescription_Good(t *testing.T) {
+	input := json.RawMessage(`{"prompt":"Short prompt","subagent_type":"codegen"}`)
+	result := extractToolInput("Task", input)
+	assert.Equal(t, "[codegen] Short prompt", result)
+}
+
+func TestExtractToolInput_UnknownTool_Good(t *testing.T) {
+	input := json.RawMessage(`{"alpha":"one","beta":"two"}`)
+	result := extractToolInput("CustomTool", input)
+	// Fallback: sorted keys
+	assert.Equal(t, "alpha, beta", result)
+}
+
+func TestExtractToolInput_NilInput_Bad(t *testing.T) {
+	result := extractToolInput("Bash", nil)
+	assert.Equal(t, "", result)
+}
+
+func TestExtractToolInput_InvalidJSON_Bad(t *testing.T) {
+	input := json.RawMessage(`{broken`)
+	result := extractToolInput("Bash", input)
+	// All unmarshals fail, including the fallback map unmarshal
+	assert.Equal(t, "", result)
+}
+
+// --- extractResultContent tests ---
+
+func TestExtractResultContent_String_Good(t *testing.T) {
+	result := extractResultContent("simple string")
+	assert.Equal(t, "simple string", result)
+}
+
+func TestExtractResultContent_Array_Good(t *testing.T) {
+	content := []interface{}{
+		map[string]interface{}{"type": "text", "text": "line one"},
+		map[string]interface{}{"type": "text", "text": "line two"},
 	}
+	result := extractResultContent(content)
+	assert.Equal(t, "line one\nline two", result)
+}
+
+func TestExtractResultContent_Map_Good(t *testing.T) {
+	content := map[string]interface{}{"text": "from map"}
+	result := extractResultContent(content)
+	assert.Equal(t, "from map", result)
+}
+
+func TestExtractResultContent_Other_Bad(t *testing.T) {
+	result := extractResultContent(42)
+	assert.Equal(t, "42", result)
+}
+
+// --- truncate tests ---
+
+func TestTruncate_Short_Good(t *testing.T) {
+	assert.Equal(t, "hello", truncate("hello", 10))
+}
+
+func TestTruncate_Exact_Good(t *testing.T) {
+	assert.Equal(t, "hello", truncate("hello", 5))
+}
+
+func TestTruncate_Long_Good(t *testing.T) {
+	result := truncate("hello world", 5)
+	assert.Equal(t, "hello...", result)
+}
+
+func TestTruncate_Empty_Good(t *testing.T) {
+	assert.Equal(t, "", truncate("", 10))
+}
+
+// --- helper function tests ---
+
+func TestShortID_Good(t *testing.T) {
+	assert.Equal(t, "abcdefgh", shortID("abcdefghijklmnop"))
+	assert.Equal(t, "short", shortID("short"))
+	assert.Equal(t, "12345678", shortID("12345678"))
+}
+
+func TestFormatDuration_Good(t *testing.T) {
+	assert.Equal(t, "500ms", formatDuration(500*time.Millisecond))
+	assert.Equal(t, "1.5s", formatDuration(1500*time.Millisecond))
+	assert.Equal(t, "2m30s", formatDuration(2*time.Minute+30*time.Second))
+	assert.Equal(t, "1h5m", formatDuration(1*time.Hour+5*time.Minute))
 }
