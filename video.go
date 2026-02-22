@@ -81,7 +81,7 @@ func generateTape(sess *Session, outputPath string) string {
 				output = output[:200] + "..."
 			}
 			if output != "" {
-				for _, line := range strings.Split(output, "\n") {
+				for line := range strings.SplitSeq(output, "\n") {
 					if line == "" {
 						continue
 					}

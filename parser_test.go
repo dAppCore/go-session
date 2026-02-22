@@ -24,20 +24,20 @@ func ts(offsetSec int) string {
 }
 
 // jsonlLine marshals an arbitrary map to a single JSONL line.
-func jsonlLine(m map[string]interface{}) string {
+func jsonlLine(m map[string]any) string {
 	b, _ := json.Marshal(m)
 	return string(b)
 }
 
 // userTextEntry creates a JSONL line for a user text message.
 func userTextEntry(timestamp string, text string) string {
-	return jsonlLine(map[string]interface{}{
+	return jsonlLine(map[string]any{
 		"type":      "user",
 		"timestamp": timestamp,
 		"sessionId": "test-session",
-		"message": map[string]interface{}{
+		"message": map[string]any{
 			"role": "user",
-			"content": []map[string]interface{}{
+			"content": []map[string]any{
 				{"type": "text", "text": text},
 			},
 		},
@@ -46,13 +46,13 @@ func userTextEntry(timestamp string, text string) string {
 
 // assistantTextEntry creates a JSONL line for an assistant text message.
 func assistantTextEntry(timestamp string, text string) string {
-	return jsonlLine(map[string]interface{}{
+	return jsonlLine(map[string]any{
 		"type":      "assistant",
 		"timestamp": timestamp,
 		"sessionId": "test-session",
-		"message": map[string]interface{}{
+		"message": map[string]any{
 			"role": "assistant",
-			"content": []map[string]interface{}{
+			"content": []map[string]any{
 				{"type": "text", "text": text},
 			},
 		},
@@ -60,14 +60,14 @@ func assistantTextEntry(timestamp string, text string) string {
 }
 
 // toolUseEntry creates a JSONL line for an assistant message containing a tool_use block.
-func toolUseEntry(timestamp, toolName, toolID string, input map[string]interface{}) string {
-	return jsonlLine(map[string]interface{}{
+func toolUseEntry(timestamp, toolName, toolID string, input map[string]any) string {
+	return jsonlLine(map[string]any{
 		"type":      "assistant",
 		"timestamp": timestamp,
 		"sessionId": "test-session",
-		"message": map[string]interface{}{
+		"message": map[string]any{
 			"role": "assistant",
-			"content": []map[string]interface{}{
+			"content": []map[string]any{
 				{
 					"type":  "tool_use",
 					"name":  toolName,
@@ -80,14 +80,14 @@ func toolUseEntry(timestamp, toolName, toolID string, input map[string]interface
 }
 
 // toolResultEntry creates a JSONL line for a user message containing a tool_result block.
-func toolResultEntry(timestamp, toolUseID string, content interface{}, isError bool) string {
-	entry := map[string]interface{}{
+func toolResultEntry(timestamp, toolUseID string, content any, isError bool) string {
+	entry := map[string]any{
 		"type":      "user",
 		"timestamp": timestamp,
 		"sessionId": "test-session",
-		"message": map[string]interface{}{
+		"message": map[string]any{
 			"role": "user",
-			"content": []map[string]interface{}{
+			"content": []map[string]any{
 				{
 					"type":        "tool_result",
 					"tool_use_id": toolUseID,
@@ -142,44 +142,44 @@ func TestParseTranscript_ToolCalls_Good(t *testing.T) {
 	lines := []string{
 		userTextEntry(ts(0), "Run a command"),
 		// Bash tool_use
-		toolUseEntry(ts(1), "Bash", "tool-bash-1", map[string]interface{}{
+		toolUseEntry(ts(1), "Bash", "tool-bash-1", map[string]any{
 			"command":     "ls -la",
 			"description": "list files",
 		}),
 		toolResultEntry(ts(2), "tool-bash-1", "total 42\ndrwxr-xr-x 5 user staff 160 Feb 20 10:00 .", false),
 		// Read tool_use
-		toolUseEntry(ts(3), "Read", "tool-read-1", map[string]interface{}{
+		toolUseEntry(ts(3), "Read", "tool-read-1", map[string]any{
 			"file_path": "/tmp/test.go",
 		}),
 		toolResultEntry(ts(4), "tool-read-1", "package main\n\nfunc main() {}", false),
 		// Edit tool_use
-		toolUseEntry(ts(5), "Edit", "tool-edit-1", map[string]interface{}{
+		toolUseEntry(ts(5), "Edit", "tool-edit-1", map[string]any{
 			"file_path":  "/tmp/test.go",
 			"old_string": "main",
 			"new_string": "app",
 		}),
 		toolResultEntry(ts(6), "tool-edit-1", "ok", false),
 		// Write tool_use
-		toolUseEntry(ts(7), "Write", "tool-write-1", map[string]interface{}{
+		toolUseEntry(ts(7), "Write", "tool-write-1", map[string]any{
 			"file_path": "/tmp/new.go",
 			"content":   "package new\n",
 		}),
 		toolResultEntry(ts(8), "tool-write-1", "ok", false),
 		// Grep tool_use
-		toolUseEntry(ts(9), "Grep", "tool-grep-1", map[string]interface{}{
+		toolUseEntry(ts(9), "Grep", "tool-grep-1", map[string]any{
 			"pattern": "TODO",
 			"path":    "/tmp",
 		}),
 		toolResultEntry(ts(10), "tool-grep-1", "/tmp/test.go:3:// TODO fix this", false),
 		// Glob tool_use
-		toolUseEntry(ts(11), "Glob", "tool-glob-1", map[string]interface{}{
+		toolUseEntry(ts(11), "Glob", "tool-glob-1", map[string]any{
 			"pattern": "**/*.go",
 		}),
 		toolResultEntry(ts(12), "tool-glob-1", "/tmp/test.go\n/tmp/new.go", false),
 		// Task tool_use
-		toolUseEntry(ts(13), "Task", "tool-task-1", map[string]interface{}{
-			"prompt":       "Analyse the code",
-			"description":  "Code analysis",
+		toolUseEntry(ts(13), "Task", "tool-task-1", map[string]any{
+			"prompt":        "Analyse the code",
+			"description":   "Code analysis",
 			"subagent_type": "research",
 		}),
 		toolResultEntry(ts(14), "tool-task-1", "Analysis complete", false),
@@ -230,7 +230,7 @@ func TestParseTranscript_ToolCalls_Good(t *testing.T) {
 func TestParseTranscript_ToolError_Good(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "error.jsonl",
-		toolUseEntry(ts(0), "Bash", "tool-err-1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "tool-err-1", map[string]any{
 			"command": "cat /nonexistent",
 		}),
 		toolResultEntry(ts(1), "tool-err-1", "cat: /nonexistent: No such file or directory", true),
@@ -309,11 +309,11 @@ func TestParseTranscript_LargeSession_Good(t *testing.T) {
 	lines = append(lines, userTextEntry(ts(0), "Start large session"))
 
 	// Generate 1000+ tool call pairs
-	for i := 0; i < 1100; i++ {
+	for i := range 1100 {
 		toolID := fmt.Sprintf("tool-%d", i)
 		offset := (i * 2) + 1
 		lines = append(lines,
-			toolUseEntry(ts(offset), "Bash", toolID, map[string]interface{}{
+			toolUseEntry(ts(offset), "Bash", toolID, map[string]any{
 				"command": fmt.Sprintf("echo %d", i),
 			}),
 			toolResultEntry(ts(offset+1), toolID, fmt.Sprintf("output %d", i), false),
@@ -339,23 +339,23 @@ func TestParseTranscript_NestedToolResults_Good(t *testing.T) {
 	dir := t.TempDir()
 
 	// Tool result with array content (multiple text blocks)
-	arrayContent := []map[string]interface{}{
+	arrayContent := []map[string]any{
 		{"type": "text", "text": "First block"},
 		{"type": "text", "text": "Second block"},
 	}
 
 	lines := []string{
-		toolUseEntry(ts(0), "Bash", "tool-nested-1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "tool-nested-1", map[string]any{
 			"command": "complex output",
 		}),
 		// Build the tool result with array content manually
-		jsonlLine(map[string]interface{}{
+		jsonlLine(map[string]any{
 			"type":      "user",
 			"timestamp": ts(1),
 			"sessionId": "test-session",
-			"message": map[string]interface{}{
+			"message": map[string]any{
 				"role": "user",
-				"content": []map[string]interface{}{
+				"content": []map[string]any{
 					{
 						"type":        "tool_result",
 						"tool_use_id": "tool-nested-1",
@@ -388,21 +388,21 @@ func TestParseTranscript_NestedMapResult_Good(t *testing.T) {
 	dir := t.TempDir()
 
 	lines := []string{
-		toolUseEntry(ts(0), "Read", "tool-map-1", map[string]interface{}{
+		toolUseEntry(ts(0), "Read", "tool-map-1", map[string]any{
 			"file_path": "/tmp/data.json",
 		}),
 		// Build a tool result with map content
-		jsonlLine(map[string]interface{}{
+		jsonlLine(map[string]any{
 			"type":      "user",
 			"timestamp": ts(1),
 			"sessionId": "test-session",
-			"message": map[string]interface{}{
+			"message": map[string]any{
 				"role": "user",
-				"content": []map[string]interface{}{
+				"content": []map[string]any{
 					{
 						"type":        "tool_result",
 						"tool_use_id": "tool-map-1",
-						"content": map[string]interface{}{
+						"content": map[string]any{
 							"text": "file contents here",
 						},
 						"is_error": false,
@@ -485,19 +485,19 @@ func TestParseTranscript_MixedContentBlocks_Good(t *testing.T) {
 
 	lines := []string{
 		// An assistant message with text + tool_use in the same content array
-		jsonlLine(map[string]interface{}{
+		jsonlLine(map[string]any{
 			"type":      "assistant",
 			"timestamp": ts(0),
 			"sessionId": "test-session",
-			"message": map[string]interface{}{
+			"message": map[string]any{
 				"role": "assistant",
-				"content": []map[string]interface{}{
+				"content": []map[string]any{
 					{"type": "text", "text": "Let me check that file."},
 					{
 						"type":  "tool_use",
 						"name":  "Read",
 						"id":    "tool-mixed-1",
-						"input": map[string]interface{}{"file_path": "/tmp/mix.go"},
+						"input": map[string]any{"file_path": "/tmp/mix.go"},
 					},
 				},
 			},
@@ -536,13 +536,13 @@ func TestParseTranscript_UnmatchedToolResult_Bad(t *testing.T) {
 func TestParseTranscript_EmptyTimestamp_Bad(t *testing.T) {
 	dir := t.TempDir()
 	// Entry with empty timestamp
-	line := jsonlLine(map[string]interface{}{
+	line := jsonlLine(map[string]any{
 		"type":      "user",
 		"timestamp": "",
 		"sessionId": "test-session",
-		"message": map[string]interface{}{
+		"message": map[string]any{
 			"role": "user",
-			"content": []map[string]interface{}{
+			"content": []map[string]any{
 				{"type": "text", "text": "No timestamp"},
 			},
 		},
@@ -730,16 +730,16 @@ func TestExtractResultContent_String_Good(t *testing.T) {
 }
 
 func TestExtractResultContent_Array_Good(t *testing.T) {
-	content := []interface{}{
-		map[string]interface{}{"type": "text", "text": "line one"},
-		map[string]interface{}{"type": "text", "text": "line two"},
+	content := []any{
+		map[string]any{"type": "text", "text": "line one"},
+		map[string]any{"type": "text", "text": "line two"},
 	}
 	result := extractResultContent(content)
 	assert.Equal(t, "line one\nline two", result)
 }
 
 func TestExtractResultContent_Map_Good(t *testing.T) {
-	content := map[string]interface{}{"text": "from map"}
+	content := map[string]any{"text": "from map"}
 	result := extractResultContent(content)
 	assert.Equal(t, "from map", result)
 }
@@ -789,7 +789,7 @@ func TestParseStats_CleanJSONL_Good(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "clean.jsonl",
 		userTextEntry(ts(0), "Hello"),
-		toolUseEntry(ts(1), "Bash", "tool-1", map[string]interface{}{
+		toolUseEntry(ts(1), "Bash", "tool-1", map[string]any{
 			"command": "ls",
 		}),
 		toolResultEntry(ts(2), "tool-1", "ok", false),
@@ -834,10 +834,10 @@ func TestParseStats_OrphanedToolCalls_Good(t *testing.T) {
 	dir := t.TempDir()
 	// Two tool_use entries with no matching tool_result
 	path := writeJSONL(t, dir, "orphaned.jsonl",
-		toolUseEntry(ts(0), "Bash", "orphan-1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "orphan-1", map[string]any{
 			"command": "ls",
 		}),
-		toolUseEntry(ts(1), "Read", "orphan-2", map[string]interface{}{
+		toolUseEntry(ts(1), "Read", "orphan-2", map[string]any{
 			"file_path": "/tmp/file.go",
 		}),
 		assistantTextEntry(ts(2), "Never got results"),
@@ -981,7 +981,7 @@ func TestParseTranscriptReader_MinimalValid_Good(t *testing.T) {
 func TestParseTranscriptReader_BytesBuffer_Good(t *testing.T) {
 	// Parse from a bytes.Buffer (common streaming use case).
 	data := strings.Join([]string{
-		toolUseEntry(ts(0), "Bash", "tu-buf-1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "tu-buf-1", map[string]any{
 			"command":     "echo ok",
 			"description": "test",
 		}),
@@ -1038,7 +1038,7 @@ func TestParseTranscriptReader_MalformedWithStats_Good(t *testing.T) {
 func TestParseTranscriptReader_OrphanedTools_Good(t *testing.T) {
 	// Tool calls without results should be tracked in stats.
 	data := strings.Join([]string{
-		toolUseEntry(ts(0), "Bash", "orphan-r1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "orphan-r1", map[string]any{
 			"command": "ls",
 		}),
 		assistantTextEntry(ts(1), "No result arrived"),
@@ -1056,7 +1056,7 @@ func TestParseTranscript_CustomMCPTool_Good(t *testing.T) {
 	// A tool_use with a non-standard MCP tool name (e.g. mcp__server__tool).
 	dir := t.TempDir()
 	lines := []string{
-		toolUseEntry(ts(0), "mcp__forge__create_issue", "tu-mcp-1", map[string]interface{}{
+		toolUseEntry(ts(0), "mcp__forge__create_issue", "tu-mcp-1", map[string]any{
 			"title": "bug report",
 			"body":  "something broke",
 			"repo":  "core/go",
@@ -1088,9 +1088,9 @@ func TestParseTranscript_CustomMCPToolNestedInput_Good(t *testing.T) {
 	// MCP tool with nested JSON input — should show top-level keys.
 	dir := t.TempDir()
 	lines := []string{
-		toolUseEntry(ts(0), "mcp__db__query", "tu-nested-1", map[string]interface{}{
+		toolUseEntry(ts(0), "mcp__db__query", "tu-nested-1", map[string]any{
 			"query":  "SELECT *",
-			"params": map[string]interface{}{"limit": 10, "offset": 0},
+			"params": map[string]any{"limit": 10, "offset": 0},
 		}),
 		toolResultEntry(ts(1), "tu-nested-1", "3 rows returned", false),
 	}
@@ -1115,7 +1115,7 @@ func TestParseTranscript_UnknownToolEmptyInput_Good(t *testing.T) {
 	// A tool_use with an empty input object.
 	dir := t.TempDir()
 	lines := []string{
-		toolUseEntry(ts(0), "SomeTool", "tu-empty-1", map[string]interface{}{}),
+		toolUseEntry(ts(0), "SomeTool", "tu-empty-1", map[string]any{}),
 		toolResultEntry(ts(1), "tu-empty-1", "done", false),
 	}
 	path := writeJSONL(t, dir, "empty_input.jsonl", lines...)

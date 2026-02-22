@@ -21,7 +21,7 @@ func TestSearch_EmptyDir_Good(t *testing.T) {
 func TestSearch_NoMatches_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
-		toolUseEntry(ts(0), "Bash", "tool-1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "tool-1", map[string]any{
 			"command": "ls -la",
 		}),
 		toolResultEntry(ts(1), "tool-1", "total 42", false),
@@ -35,7 +35,7 @@ func TestSearch_NoMatches_Good(t *testing.T) {
 func TestSearch_SingleMatch_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
-		toolUseEntry(ts(0), "Bash", "tool-1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "tool-1", map[string]any{
 			"command": "go test ./...",
 		}),
 		toolResultEntry(ts(1), "tool-1", "PASS ok mypackage 0.5s", false),
@@ -53,17 +53,17 @@ func TestSearch_SingleMatch_Good(t *testing.T) {
 func TestSearch_MultipleMatches_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session1.jsonl",
-		toolUseEntry(ts(0), "Bash", "t1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "t1", map[string]any{
 			"command": "go test ./...",
 		}),
 		toolResultEntry(ts(1), "t1", "PASS", false),
-		toolUseEntry(ts(2), "Bash", "t2", map[string]interface{}{
+		toolUseEntry(ts(2), "Bash", "t2", map[string]any{
 			"command": "go test -race ./...",
 		}),
 		toolResultEntry(ts(3), "t2", "PASS", false),
 	)
 	writeJSONL(t, dir, "session2.jsonl",
-		toolUseEntry(ts(0), "Bash", "t3", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "t3", map[string]any{
 			"command": "go test -bench=.",
 		}),
 		toolResultEntry(ts(1), "t3", "PASS", false),
@@ -77,7 +77,7 @@ func TestSearch_MultipleMatches_Good(t *testing.T) {
 func TestSearch_CaseInsensitive_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
-		toolUseEntry(ts(0), "Bash", "t1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "t1", map[string]any{
 			"command": "GO TEST ./...",
 		}),
 		toolResultEntry(ts(1), "t1", "PASS", false),
@@ -91,7 +91,7 @@ func TestSearch_CaseInsensitive_Good(t *testing.T) {
 func TestSearch_MatchesInOutput_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
-		toolUseEntry(ts(0), "Bash", "t1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "t1", map[string]any{
 			"command": "cat log.txt",
 		}),
 		toolResultEntry(ts(1), "t1", "ERROR: connection refused to database", false),
@@ -134,7 +134,7 @@ func TestSearch_MalformedSessionSkipped_Bad(t *testing.T) {
 		`{not valid json at all`,
 	)
 	writeJSONL(t, dir, "valid.jsonl",
-		toolUseEntry(ts(0), "Bash", "t1", map[string]interface{}{
+		toolUseEntry(ts(0), "Bash", "t1", map[string]any{
 			"command": "go test ./...",
 		}),
 		toolResultEntry(ts(1), "t1", "PASS", false),

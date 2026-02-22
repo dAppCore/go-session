@@ -49,7 +49,7 @@ func BenchmarkListSessions(b *testing.B) {
 	dir := b.TempDir()
 
 	// Create 20 session files
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		generateBenchJSONL(b, dir, 100)
 	}
 
@@ -72,7 +72,7 @@ func BenchmarkSearch(b *testing.B) {
 	dir := b.TempDir()
 
 	// Create 10 session files with varied content
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		generateBenchJSONL(b, dir, 500)
 	}
 
@@ -99,7 +99,7 @@ func generateBenchJSONL(b testing.TB, dir string, numTools int) string {
 	sb.WriteString(fmt.Sprintf(`{"type":"user","timestamp":"%s","sessionId":"bench","message":{"role":"user","content":[{"type":"text","text":"Start benchmark session"}]}}`, baseTS))
 	sb.WriteByte('\n')
 
-	for i := 0; i < numTools; i++ {
+	for i := range numTools {
 		toolID := fmt.Sprintf("tool-%d", i)
 		offset := i * 2
 
