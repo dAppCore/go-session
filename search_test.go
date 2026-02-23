@@ -50,6 +50,25 @@ func TestSearch_SingleMatch_Good(t *testing.T) {
 	assert.Contains(t, results[0].Match, "go test")
 }
 
+func TestSearchSeq_SingleMatch_Good(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "session.jsonl",
+		toolUseEntry(ts(0), "Bash", "tool-1", map[string]any{
+			"command": "go test ./...",
+		}),
+		toolResultEntry(ts(1), "tool-1", "PASS ok mypackage 0.5s", false),
+	)
+
+	var results []SearchResult
+	for r := range SearchSeq(dir, "go test") {
+		results = append(results, r)
+	}
+
+	require.Len(t, results, 1)
+	assert.Equal(t, "session", results[0].SessionID)
+	assert.Equal(t, "Bash", results[0].Tool)
+}
+
 func TestSearch_MultipleMatches_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session1.jsonl",

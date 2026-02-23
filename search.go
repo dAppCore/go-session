@@ -1,7 +1,9 @@
 package session
 
 import (
+	"iter"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -16,39 +18,46 @@ type SearchResult struct {
 
 // Search finds events matching the query across all sessions in the directory.
 func Search(projectsDir, query string) ([]SearchResult, error) {
-	matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
-	if err != nil {
-		return nil, err
-	}
+	return slices.Collect(SearchSeq(projectsDir, query)), nil
+}
 
-	var results []SearchResult
-	query = strings.ToLower(query)
-
-	for _, path := range matches {
-		sess, _, err := ParseTranscript(path)
+// SearchSeq returns an iterator over search results matching the query across all sessions.
+func SearchSeq(projectsDir, query string) iter.Seq[SearchResult] {
+	return func(yield func(SearchResult) bool) {
+		matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
 		if err != nil {
-			continue
+			return
 		}
 
-		for _, evt := range sess.Events {
-			if evt.Type != "tool_use" {
+		query = strings.ToLower(query)
+
+		for _, path := range matches {
+			sess, _, err := ParseTranscript(path)
+			if err != nil {
 				continue
 			}
-			text := strings.ToLower(evt.Input + " " + evt.Output)
-			if strings.Contains(text, query) {
-				matchCtx := evt.Input
-				if matchCtx == "" {
-					matchCtx = truncate(evt.Output, 120)
+
+			for _, evt := range sess.Events {
+				if evt.Type != "tool_use" {
+					continue
 				}
-				results = append(results, SearchResult{
-					SessionID: sess.ID,
-					Timestamp: evt.Timestamp,
-					Tool:      evt.Tool,
-					Match:     matchCtx,
-				})
+				text := strings.ToLower(evt.Input + " " + evt.Output)
+				if strings.Contains(text, query) {
+					matchCtx := evt.Input
+					if matchCtx == "" {
+						matchCtx = truncate(evt.Output, 120)
+					}
+					res := SearchResult{
+						SessionID: sess.ID,
+						Timestamp: evt.Timestamp,
+						Tool:      evt.Tool,
+						Match:     matchCtx,
+					}
+					if !yield(res) {
+						return
+					}
+				}
 			}
 		}
 	}
-
-	return results, nil
 }

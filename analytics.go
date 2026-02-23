@@ -3,21 +3,22 @@ package session
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 )
 
 // SessionAnalytics holds computed metrics for a parsed session.
 type SessionAnalytics struct {
-	Duration             time.Duration
-	ActiveTime           time.Duration
-	EventCount           int
-	ToolCounts           map[string]int
-	ErrorCounts          map[string]int
-	SuccessRate          float64
-	AvgLatency           map[string]time.Duration
-	MaxLatency           map[string]time.Duration
+	Duration              time.Duration
+	ActiveTime            time.Duration
+	EventCount            int
+	ToolCounts            map[string]int
+	ErrorCounts           map[string]int
+	SuccessRate           float64
+	AvgLatency            map[string]time.Duration
+	MaxLatency            map[string]time.Duration
 	EstimatedInputTokens  int
 	EstimatedOutputTokens int
 }
@@ -117,13 +118,7 @@ func FormatAnalytics(a *SessionAnalytics) string {
 		b.WriteString("  " + strings.Repeat("-", 48) + "\n")
 
 		// Sort tools for deterministic output
-		tools := make([]string, 0, len(a.ToolCounts))
-		for t := range a.ToolCounts {
-			tools = append(tools, t)
-		}
-		sort.Strings(tools)
-
-		for _, tool := range tools {
+		for _, tool := range slices.Sorted(maps.Keys(a.ToolCounts)) {
 			errors := a.ErrorCounts[tool]
 			avg := a.AvgLatency[tool]
 			max := a.MaxLatency[tool]

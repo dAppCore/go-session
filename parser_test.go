@@ -479,6 +479,23 @@ func TestParseTranscript_TextTruncation_Good(t *testing.T) {
 	assert.True(t, strings.HasSuffix(sess.Events[0].Input, "..."), "truncated text should end with ...")
 }
 
+func TestSession_EventsSeq_Good(t *testing.T) {
+	sess := &Session{
+		Events: []Event{
+			{Type: "user", Input: "one"},
+			{Type: "assistant", Input: "two"},
+			{Type: "tool_use", Tool: "Bash", Input: "three"},
+		},
+	}
+
+	var events []Event
+	for e := range sess.EventsSeq() {
+		events = append(events, e)
+	}
+
+	assert.Equal(t, sess.Events, events)
+}
+
 func TestParseTranscript_MixedContentBlocks_Good(t *testing.T) {
 	// Assistant message with both text and tool_use in the same message
 	dir := t.TempDir()
@@ -622,6 +639,26 @@ func TestListSessions_NonJSONLIgnored_Good(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, sessions, 1)
 	assert.Equal(t, "real-session", sessions[0].ID)
+}
+
+func TestListSessionsSeq_MultipleSorted_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create three sessions with different timestamps.
+	writeJSONL(t, dir, "old.jsonl", userTextEntry(ts(0), "old"))
+	writeJSONL(t, dir, "mid.jsonl", userTextEntry(ts(100), "mid"))
+	writeJSONL(t, dir, "new.jsonl", userTextEntry(ts(200), "new"))
+
+	var sessions []Session
+	for s := range ListSessionsSeq(dir) {
+		sessions = append(sessions, s)
+	}
+
+	require.Len(t, sessions, 3)
+	// Should be sorted newest first
+	assert.Equal(t, "new", sessions[0].ID)
+	assert.Equal(t, "mid", sessions[1].ID)
+	assert.Equal(t, "old", sessions[2].ID)
 }
 
 func TestListSessions_MalformedJSONLStillListed_Bad(t *testing.T) {

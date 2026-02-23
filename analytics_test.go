@@ -74,8 +74,8 @@ func TestAnalyse_MixedToolsWithErrors_Good(t *testing.T) {
 		EndTime:   time.Date(2026, 2, 20, 10, 5, 0, 0, time.UTC),
 		Events: []Event{
 			{
-				Type:     "user",
-				Input:    "Please help",
+				Type:  "user",
+				Input: "Please help",
 			},
 			{
 				Type:     "tool_use",
@@ -204,12 +204,12 @@ func TestAnalyse_TokenEstimation_Good(t *testing.T) {
 				Input: strings.Repeat("a", 400), // 100 tokens
 			},
 			{
-				Type:   "tool_use",
-				Tool:   "Bash",
-				Input:  strings.Repeat("b", 80),  // 20 tokens
-				Output: strings.Repeat("c", 200), // 50 tokens
+				Type:     "tool_use",
+				Tool:     "Bash",
+				Input:    strings.Repeat("b", 80),  // 20 tokens
+				Output:   strings.Repeat("c", 200), // 50 tokens
 				Duration: time.Second,
-				Success: true,
+				Success:  true,
 			},
 			{
 				Type:  "assistant",

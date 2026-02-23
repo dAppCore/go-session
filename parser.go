@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
@@ -36,6 +38,11 @@ type Session struct {
 	StartTime time.Time
 	EndTime   time.Time
 	Events    []Event
+}
+
+// EventsSeq returns an iterator over the session's events.
+func (s *Session) EventsSeq() iter.Seq[Event] {
+	return slices.Values(s.Events)
 }
 
 // rawEntry is the top-level structure of a Claude Code JSONL line.
@@ -112,68 +119,85 @@ type ParseStats struct {
 
 // ListSessions returns all sessions found in the Claude projects directory.
 func ListSessions(projectsDir string) ([]Session, error) {
-	matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
-	if err != nil {
-		return nil, fmt.Errorf("glob sessions: %w", err)
-	}
+	return slices.Collect(ListSessionsSeq(projectsDir)), nil
+}
 
-	var sessions []Session
-	for _, path := range matches {
-		base := filepath.Base(path)
-		id := strings.TrimSuffix(base, ".jsonl")
-
-		info, err := os.Stat(path)
+// ListSessionsSeq returns an iterator over all sessions found in the Claude projects directory.
+func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
+	return func(yield func(Session) bool) {
+		matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
 		if err != nil {
-			continue
+			return
 		}
 
-		s := Session{
-			ID:   id,
-			Path: path,
-		}
+		var sessions []Session
+		for _, path := range matches {
+			base := filepath.Base(path)
+			id := strings.TrimSuffix(base, ".jsonl")
 
-		// Quick scan for first and last timestamps
-		f, err := os.Open(path)
-		if err != nil {
-			continue
-		}
-
-		scanner := bufio.NewScanner(f)
-		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-		var firstTS, lastTS string
-		for scanner.Scan() {
-			var entry rawEntry
-			if json.Unmarshal(scanner.Bytes(), &entry) != nil {
+			info, err := os.Stat(path)
+			if err != nil {
 				continue
 			}
-			if entry.Timestamp == "" {
+
+			s := Session{
+				ID:   id,
+				Path: path,
+			}
+
+			// Quick scan for first and last timestamps
+			f, err := os.Open(path)
+			if err != nil {
 				continue
 			}
-			if firstTS == "" {
-				firstTS = entry.Timestamp
+
+			scanner := bufio.NewScanner(f)
+			scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+			var firstTS, lastTS string
+			for scanner.Scan() {
+				var entry rawEntry
+				if json.Unmarshal(scanner.Bytes(), &entry) != nil {
+					continue
+				}
+				if entry.Timestamp == "" {
+					continue
+				}
+				if firstTS == "" {
+					firstTS = entry.Timestamp
+				}
+				lastTS = entry.Timestamp
 			}
-			lastTS = entry.Timestamp
-		}
-		f.Close()
+			f.Close()
 
-		if firstTS != "" {
-			s.StartTime, _ = time.Parse(time.RFC3339Nano, firstTS)
-		}
-		if lastTS != "" {
-			s.EndTime, _ = time.Parse(time.RFC3339Nano, lastTS)
-		}
-		if s.StartTime.IsZero() {
-			s.StartTime = info.ModTime()
+			if firstTS != "" {
+				s.StartTime, _ = time.Parse(time.RFC3339Nano, firstTS)
+			}
+			if lastTS != "" {
+				s.EndTime, _ = time.Parse(time.RFC3339Nano, lastTS)
+			}
+			if s.StartTime.IsZero() {
+				s.StartTime = info.ModTime()
+			}
+
+			sessions = append(sessions, s)
 		}
 
-		sessions = append(sessions, s)
+		slices.SortFunc(sessions, func(i, j Session) int {
+			if i.StartTime.After(j.StartTime) {
+				return -1
+			}
+			if i.StartTime.Before(j.StartTime) {
+				return 1
+			}
+			return 0
+		})
+
+		for _, s := range sessions {
+			if !yield(s) {
+				return
+			}
+		}
 	}
-
-	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].StartTime.After(sessions[j].StartTime)
-	})
-
-	return sessions, nil
 }
 
 // ParseTranscript reads a JSONL session file and returns structured events.
@@ -419,11 +443,7 @@ func extractToolInput(toolName string, raw json.RawMessage) string {
 	// Fallback: show raw JSON keys
 	var m map[string]any
 	if json.Unmarshal(raw, &m) == nil {
-		var parts []string
-		for k := range m {
-			parts = append(parts, k)
-		}
-		sort.Strings(parts)
+		parts := slices.Sorted(maps.Keys(m))
 		return strings.Join(parts, ", ")
 	}
 
