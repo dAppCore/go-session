@@ -170,10 +170,14 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 			f.Close()
 
 			if firstTS != "" {
-				s.StartTime, _ = time.Parse(time.RFC3339Nano, firstTS)
+				if t, err := time.Parse(time.RFC3339Nano, firstTS); err == nil {
+					s.StartTime = t
+				}
 			}
 			if lastTS != "" {
-				s.EndTime, _ = time.Parse(time.RFC3339Nano, lastTS)
+				if t, err := time.Parse(time.RFC3339Nano, lastTS); err == nil {
+					s.EndTime = t
+				}
 			}
 			if s.StartTime.IsZero() {
 				s.StartTime = info.ModTime()
@@ -183,13 +187,7 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 		}
 
 		slices.SortFunc(sessions, func(i, j Session) int {
-			if i.StartTime.After(j.StartTime) {
-				return -1
-			}
-			if i.StartTime.Before(j.StartTime) {
-				return 1
-			}
-			return 0
+			return j.StartTime.Compare(i.StartTime)
 		})
 
 		for _, s := range sessions {
@@ -198,6 +196,51 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 			}
 		}
 	}
+}
+
+// PruneSessions deletes session files in the projects directory that were last
+// modified more than maxAge ago. Returns the number of files deleted.
+func PruneSessions(projectsDir string, maxAge time.Duration) (int, error) {
+	matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
+	if err != nil {
+		return 0, fmt.Errorf("list sessions for pruning: %w", err)
+	}
+
+	var deleted int
+	now := time.Now()
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+
+		if now.Sub(info.ModTime()) > maxAge {
+			if err := os.Remove(path); err == nil {
+				deleted++
+			}
+		}
+	}
+	return deleted, nil
+}
+
+// IsExpired returns true if the session's end time is older than the given maxAge
+// relative to now.
+func (s *Session) IsExpired(maxAge time.Duration) bool {
+	if s.EndTime.IsZero() {
+		return false
+	}
+	return time.Since(s.EndTime) > maxAge
+}
+
+// FetchSession retrieves a session by ID from the projects directory.
+// It ensures the ID does not contain path traversal characters.
+func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
+	if strings.Contains(id, "..") || strings.ContainsAny(id, `/\`) {
+		return nil, nil, fmt.Errorf("invalid session id")
+	}
+
+	path := filepath.Join(projectsDir, id+".jsonl")
+	return ParseTranscript(path)
 }
 
 // ParseTranscript reads a JSONL session file and returns structured events.
@@ -276,7 +319,11 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 			continue
 		}
 
-		ts, _ := time.Parse(time.RFC3339Nano, entry.Timestamp)
+		ts, err := time.Parse(time.RFC3339Nano, entry.Timestamp)
+		if err != nil {
+			stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d: bad timestamp %q: %v", lineNum, entry.Timestamp, err))
+			continue
+		}
 
 		if sess.StartTime.IsZero() && !ts.IsZero() {
 			sess.StartTime = ts
@@ -288,12 +335,14 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 		switch entry.Type {
 		case "assistant":
 			var msg rawMessage
-			if json.Unmarshal(entry.Message, &msg) != nil {
+			if err := json.Unmarshal(entry.Message, &msg); err != nil {
+				stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d: failed to unmarshal assistant message: %v", lineNum, err))
 				continue
 			}
-			for _, raw := range msg.Content {
+			for i, raw := range msg.Content {
 				var block contentBlock
-				if json.Unmarshal(raw, &block) != nil {
+				if err := json.Unmarshal(raw, &block); err != nil {
+					stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d block %d: failed to unmarshal content: %v", lineNum, i, err))
 					continue
 				}
 
@@ -319,12 +368,14 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 
 		case "user":
 			var msg rawMessage
-			if json.Unmarshal(entry.Message, &msg) != nil {
+			if err := json.Unmarshal(entry.Message, &msg); err != nil {
+				stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d: failed to unmarshal user message: %v", lineNum, err))
 				continue
 			}
-			for _, raw := range msg.Content {
+			for i, raw := range msg.Content {
 				var block contentBlock
-				if json.Unmarshal(raw, &block) != nil {
+				if err := json.Unmarshal(raw, &block); err != nil {
+					stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d block %d: failed to unmarshal content: %v", lineNum, i, err))
 					continue
 				}
 

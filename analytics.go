@@ -49,7 +49,7 @@ func Analyse(sess *Session) *SessionAnalytics {
 	var totalToolCalls int
 	var totalErrors int
 
-	for _, evt := range sess.Events {
+	for evt := range sess.EventsSeq() {
 		// Token estimation: ~4 chars per token
 		a.EstimatedInputTokens += len(evt.Input) / 4
 		a.EstimatedOutputTokens += len(evt.Output) / 4

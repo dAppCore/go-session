@@ -37,7 +37,7 @@ func SearchSeq(projectsDir, query string) iter.Seq[SearchResult] {
 				continue
 			}
 
-			for _, evt := range sess.Events {
+			for evt := range sess.EventsSeq() {
 				if evt.Type != "tool_use" {
 					continue
 				}

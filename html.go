@@ -19,7 +19,7 @@ func RenderHTML(sess *Session, outputPath string) error {
 	duration := sess.EndTime.Sub(sess.StartTime)
 	toolCount := 0
 	errorCount := 0
-	for _, e := range sess.Events {
+	for e := range sess.EventsSeq() {
 		if e.Type == "tool_use" {
 			toolCount++
 			if !e.Success {
@@ -114,7 +114,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 <div class="timeline" id="timeline">
 `)
 
-	for i, evt := range sess.Events {
+	var i int
+	for evt := range sess.EventsSeq() {
 		toolClass := strings.ToLower(evt.Tool)
 		if evt.Type == "user" {
 			toolClass = "user"
@@ -199,6 +200,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 		fmt.Fprint(f, `  </div>
 </div>
 `)
+		i++
 	}
 
 	fmt.Fprint(f, `</div>
