@@ -6,13 +6,15 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	coreerr "forge.lthn.ai/core/go-log"
 )
 
 // RenderHTML generates a self-contained HTML timeline from a session.
 func RenderHTML(sess *Session, outputPath string) error {
 	f, err := os.Create(outputPath)
 	if err != nil {
-		return fmt.Errorf("create html: %w", err)
+		return coreerr.E("RenderHTML", "create html", err)
 	}
 	defer f.Close()
 

@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	coreerr "forge.lthn.ai/core/go-log"
 )
 
 // maxScannerBuffer is the maximum line length the scanner will accept.
@@ -203,7 +205,7 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 func PruneSessions(projectsDir string, maxAge time.Duration) (int, error) {
 	matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
 	if err != nil {
-		return 0, fmt.Errorf("list sessions for pruning: %w", err)
+		return 0, coreerr.E("PruneSessions", "list sessions", err)
 	}
 
 	var deleted int
@@ -236,7 +238,7 @@ func (s *Session) IsExpired(maxAge time.Duration) bool {
 // It ensures the ID does not contain path traversal characters.
 func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 	if strings.Contains(id, "..") || strings.ContainsAny(id, `/\`) {
-		return nil, nil, fmt.Errorf("invalid session id")
+		return nil, nil, coreerr.E("FetchSession", "invalid session id")
 	}
 
 	path := filepath.Join(projectsDir, id+".jsonl")
@@ -248,7 +250,7 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 func ParseTranscript(path string) (*Session, *ParseStats, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open transcript: %w", err)
+		return nil, nil, coreerr.E("ParseTranscript", "open transcript", err)
 	}
 	defer f.Close()
 
