@@ -25,7 +25,7 @@ Separation of concerns:
 
 ## Directory Structure
 
-```
+```text
 doc/
 ├── TASK_PROTOCOL.md          # This file
 └── ...                       # Reference documentation
@@ -211,7 +211,7 @@ Human reviews verified task:
 
 ### For Implementation Agents
 
-```
+```text
 You are implementing TASK-XXX.
 
 1. Read the full task file
@@ -228,7 +228,7 @@ Your job is to do the work, not to verify it.
 
 ### For Verification Agents
 
-```
+```text
 You are verifying TASK-XXX.
 
 1. Read the full task file
@@ -249,7 +249,7 @@ You are the gatekeeper. Be thorough. Trust nothing the implementation agent said
 
 ## Status Flow
 
-```
+```text
 draft → ready → in_progress → needs_verification → verified → approved
                      ↑                    │
                      └────────────────────┘
@@ -341,7 +341,7 @@ Standard acceptance criteria:
 
 When phases are independent, fire agents simultaneously:
 
-```
+```text
 Human: "Implement phases 1-4 in parallel"
 
 Agent fires 4 Task tools simultaneously:
@@ -353,7 +353,7 @@ Agent fires 4 Task tools simultaneously:
 
 ### Agent Prompt Template
 
-```
+```text
 You are implementing Phase X of TASK-XXX: [Task Title]
 
 Read the task file at: tasks/TASK-XXX-feature-name.md
@@ -383,7 +383,7 @@ Do NOT mark acceptance criteria as passed — verification agent does that.
 
 ### Wave Execution Example
 
-```
+```text
 Wave 1 (parallel): Phases 1, 2, 3, 4
   ↓ (all complete)
 Wave 2 (parallel): Phases 5, 6, 7, 8
@@ -518,7 +518,7 @@ For large phased tasks, extend the schema:
 
 When implemented, the MCP endpoint will expose:
 
-```
+```text
 GET  /tasks                    # List all tasks with status
 GET  /tasks/{id}               # Get task details
 POST /tasks/{id}/claim         # Agent claims a task
