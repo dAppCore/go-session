@@ -1311,6 +1311,127 @@ func TestParseTranscript_AllBadLines_Good(t *testing.T) {
 
 // --- ListSessions with truncated files ---
 
+// --- PruneSessions tests ---
+
+func TestPruneSessions_DeletesOldFiles_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a session file with an old modification time.
+	path := writeJSONL(t, dir, "old-session.jsonl",
+		userTextEntry(ts(0), "old"),
+	)
+	// Backdate the file's mtime by 2 hours.
+	oldTime := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(path, oldTime, oldTime))
+
+	// Create a recent session file.
+	writeJSONL(t, dir, "new-session.jsonl",
+		userTextEntry(ts(0), "new"),
+	)
+
+	// Prune sessions older than 1 hour.
+	deleted, err := PruneSessions(dir, 1*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, 1, deleted)
+
+	// Verify only the new file remains.
+	sessions, err := ListSessions(dir)
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "new-session", sessions[0].ID)
+}
+
+func TestPruneSessions_NothingToDelete_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	writeJSONL(t, dir, "recent.jsonl",
+		userTextEntry(ts(0), "fresh"),
+	)
+
+	deleted, err := PruneSessions(dir, 24*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, 0, deleted)
+}
+
+func TestPruneSessions_EmptyDir_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	deleted, err := PruneSessions(dir, 1*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, 0, deleted)
+}
+
+// --- IsExpired tests ---
+
+func TestIsExpired_RecentSession_Good(t *testing.T) {
+	sess := &Session{
+		EndTime: time.Now().Add(-5 * time.Minute),
+	}
+	assert.False(t, sess.IsExpired(1*time.Hour))
+}
+
+func TestIsExpired_OldSession_Good(t *testing.T) {
+	sess := &Session{
+		EndTime: time.Now().Add(-2 * time.Hour),
+	}
+	assert.True(t, sess.IsExpired(1*time.Hour))
+}
+
+func TestIsExpired_ZeroEndTime_Bad(t *testing.T) {
+	sess := &Session{}
+	assert.False(t, sess.IsExpired(1*time.Hour))
+}
+
+// --- FetchSession tests ---
+
+func TestFetchSession_ValidID_Good(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "abc123.jsonl",
+		userTextEntry(ts(0), "hello"),
+	)
+
+	sess, stats, err := FetchSession(dir, "abc123")
+	require.NoError(t, err)
+	require.NotNil(t, sess)
+	require.NotNil(t, stats)
+	assert.Equal(t, "abc123", sess.ID)
+	assert.Len(t, sess.Events, 1)
+}
+
+func TestFetchSession_PathTraversal_Ugly(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, "../etc/passwd")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session id")
+}
+
+func TestFetchSession_BackslashTraversal_Ugly(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, `foo\bar`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session id")
+}
+
+func TestFetchSession_ForwardSlash_Ugly(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, "foo/bar")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session id")
+}
+
+func TestFetchSession_NotFound_Bad(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "open transcript")
+}
+
+// --- ListSessions with truncated files ---
+
 func TestListSessions_TruncatedFile_Good(t *testing.T) {
 	dir := t.TempDir()
 	// A .jsonl file where some lines are truncated — ListSessions should
@@ -1329,4 +1450,118 @@ func TestListSessions_TruncatedFile_Good(t *testing.T) {
 	assert.False(t, sessions[0].EndTime.IsZero())
 	// End time should reflect the last valid timestamp.
 	assert.True(t, sessions[0].EndTime.After(sessions[0].StartTime))
+}
+
+// --- PruneSessions tests ---
+
+func TestPruneSessions_DeletesOld_Good(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "old-session.jsonl", userTextEntry(ts(0), "old"))
+	writeJSONL(t, dir, "new-session.jsonl", userTextEntry(ts(0), "new"))
+
+	// Touch old-session to make it appear old (1 hour ago).
+	oldPath := filepath.Join(dir, "old-session.jsonl")
+	past := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(oldPath, past, past))
+
+	deleted, err := PruneSessions(dir, 1*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, 1, deleted)
+
+	// Only new-session should remain.
+	sessions, err := ListSessions(dir)
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "new-session", sessions[0].ID)
+}
+
+func TestPruneSessions_NoneExpired_Good(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "fresh.jsonl", userTextEntry(ts(0), "fresh"))
+
+	deleted, err := PruneSessions(dir, 24*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, 0, deleted)
+
+	sessions, err := ListSessions(dir)
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+}
+
+func TestPruneSessions_EmptyDir_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	deleted, err := PruneSessions(dir, 1*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, 0, deleted)
+}
+
+// --- IsExpired tests ---
+
+func TestIsExpired_Expired_Good(t *testing.T) {
+	s := &Session{
+		EndTime: time.Now().Add(-2 * time.Hour),
+	}
+	assert.True(t, s.IsExpired(1*time.Hour))
+}
+
+func TestIsExpired_NotExpired_Good(t *testing.T) {
+	s := &Session{
+		EndTime: time.Now().Add(-30 * time.Minute),
+	}
+	assert.False(t, s.IsExpired(1*time.Hour))
+}
+
+func TestIsExpired_ZeroEndTime_Bad(t *testing.T) {
+	s := &Session{}
+	assert.False(t, s.IsExpired(1*time.Hour))
+}
+
+// --- FetchSession tests ---
+
+func TestFetchSession_ValidID_Good(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "abc123.jsonl",
+		userTextEntry(ts(0), "Hello"),
+		assistantTextEntry(ts(1), "Hi"),
+	)
+
+	sess, stats, err := FetchSession(dir, "abc123")
+	require.NoError(t, err)
+	require.NotNil(t, sess)
+	require.NotNil(t, stats)
+	assert.Equal(t, "abc123", sess.ID)
+	assert.Len(t, sess.Events, 2)
+}
+
+func TestFetchSession_PathTraversal_Bad(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, "../etc/passwd")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session id")
+}
+
+func TestFetchSession_BackslashTraversal_Bad(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, `..\\windows\\system32`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session id")
+}
+
+func TestFetchSession_SlashInID_Bad(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, "sub/dir")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session id")
+}
+
+func TestFetchSession_NotFound_Bad(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "open transcript")
 }

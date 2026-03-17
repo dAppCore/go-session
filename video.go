@@ -1,3 +1,4 @@
+// SPDX-Licence-Identifier: EUPL-1.2
 package session
 
 import (
@@ -5,25 +6,27 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	coreerr "forge.lthn.ai/core/go-log"
 )
 
 // RenderMP4 generates an MP4 video from session events using VHS (charmbracelet).
 func RenderMP4(sess *Session, outputPath string) error {
 	if _, err := exec.LookPath("vhs"); err != nil {
-		return fmt.Errorf("vhs not installed (go install github.com/charmbracelet/vhs@latest)")
+		return coreerr.E("RenderMP4", "vhs not installed (go install github.com/charmbracelet/vhs@latest)", nil)
 	}
 
 	tape := generateTape(sess, outputPath)
 
 	tmpFile, err := os.CreateTemp("", "session-*.tape")
 	if err != nil {
-		return fmt.Errorf("create tape: %w", err)
+		return coreerr.E("RenderMP4", "create tape", err)
 	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(tape); err != nil {
 		tmpFile.Close()
-		return fmt.Errorf("write tape: %w", err)
+		return coreerr.E("RenderMP4", "write tape", err)
 	}
 	tmpFile.Close()
 
@@ -31,7 +34,7 @@ func RenderMP4(sess *Session, outputPath string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("vhs render: %w", err)
+		return coreerr.E("RenderMP4", "vhs render", err)
 	}
 
 	return nil
