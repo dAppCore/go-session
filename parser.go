@@ -1,3 +1,4 @@
+// SPDX-Licence-Identifier: EUPL-1.2
 package session
 
 import (
@@ -238,7 +239,7 @@ func (s *Session) IsExpired(maxAge time.Duration) bool {
 // It ensures the ID does not contain path traversal characters.
 func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 	if strings.Contains(id, "..") || strings.ContainsAny(id, `/\`) {
-		return nil, nil, coreerr.E("FetchSession", "invalid session id")
+		return nil, nil, coreerr.E("FetchSession", "invalid session id", nil)
 	}
 
 	path := filepath.Join(projectsDir, id+".jsonl")

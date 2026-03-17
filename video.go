@@ -1,3 +1,4 @@
+// SPDX-Licence-Identifier: EUPL-1.2
 package session
 
 import (
@@ -12,7 +13,7 @@ import (
 // RenderMP4 generates an MP4 video from session events using VHS (charmbracelet).
 func RenderMP4(sess *Session, outputPath string) error {
 	if _, err := exec.LookPath("vhs"); err != nil {
-		return coreerr.E("RenderMP4", "vhs not installed (go install github.com/charmbracelet/vhs@latest)")
+		return coreerr.E("RenderMP4", "vhs not installed (go install github.com/charmbracelet/vhs@latest)", nil)
 	}
 
 	tape := generateTape(sess, outputPath)

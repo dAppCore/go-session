@@ -45,5 +45,6 @@ Coverage target: maintain ≥90.9%.
 - Explicit types on all function signatures and struct fields
 - `go test ./...` and `go vet ./...` must pass before commit
 - SPDX header on all source files: `// SPDX-Licence-Identifier: EUPL-1.2`
+- Error handling: all errors must use `coreerr.E(op, msg, err)` from `forge.lthn.ai/core/go-log`, never `fmt.Errorf` or `errors.New`
 - Conventional commits: `type(scope): description`
 - Co-Author trailer: `Co-Authored-By: Virgil <virgil@lethean.io>`
