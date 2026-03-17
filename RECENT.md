@@ -1,6 +1,7 @@
 # Recent Changes
 
-```
+```text
+55ceab4 refactor(error-handling): replace fmt.Errorf and errors.New with coreerr.E()
 a07e41a chore: add .core/ and .idea/ to .gitignore
 50d1c3f docs: add CLAUDE.md project instructions
 bc3cc42 docs: add human-friendly documentation
@@ -20,5 +21,4 @@ cb7b5de chore: sync workspace dependency versions
 8e91626 docs: mark Phase 3 timeline UI as complete
 9b32678 docs(todo): mark Phase 1+2 complete with commit hash a6fb934
 a6fb934 feat(parser): Phase 1+2 — parse stats, truncation detection, session analytics
-c798d9d docs: flesh out Phase 1+2 task specs for parser robustness and analytics
 ```
