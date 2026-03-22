@@ -5,7 +5,7 @@ description: Internals of go-session -- JSONL format, parsing pipeline, event mo
 
 # Architecture
 
-Module: `forge.lthn.ai/core/go-session`
+Module: `dappco.re/go/core/session`
 
 ## Overview
 

@@ -2,22 +2,111 @@
 
 > Relevant knowledge from OpenBrain.
 
-## 1. go-session [convention] (score: 0.636)
+### 1. go-session [service] (score: 0.080)
 
-Documentation
+[go-session] Licence
 
-- `/Users/snider/Code/go-session/docs/architecture.md` — JSONL format, parsing pipeline, event types, analytics, HTML rendering, XSS protection
-- `/Users/snider/Code/go-session/docs/development.md` — prerequisites, build/test commands, test patterns, coding standards
-- `/Users/snider/Code/go-session/docs/history.md` — completed phases, known limitations, future considerations
+EUPL-1.2
 
-## 2. go-session [service] (score: 0.604)
+### 2. go-session [convention] (score: 0.021)
 
-[go-session] Pages
+Coding Standards
 
-- [[Session-Format]] -- JSONL structure, parsing logic, and event types
-- [[Rendering]] -- HTML timeline and MP4 video output
+- UK English throughout (colour, licence, initialise)
+- `declare(strict_types=1)` equivalent: explicit types on all signatures
+- `go test ./...` must pass before commit
+- `go vet ./...` must be clean before commit
+- SPDX-Licence-Identifier: EUPL-1.2 header on all source files
+- Conventional commits: `type(scope): description`
+- Co-Author: `Co-Authored-By: Virgil <virgil@lethean.io>`
+- Test naming: `TestFunctionName_Context_Good/Bad/Ugly`
+- New tool types: add struct in `parser.go`, case in `extractToolInput`, label in `html.go`, tape entry in `video.go`, and tests in `parser_test.go`
 
-## 3. go-session [service] (score: 0.563)
+### 3. go-session [service] (score: 0.006)
+
+[go-session] Labels
+
+The input label adapts to the tool type:
+
+- **Bash**: "Command"
+- **Read, Glob, Grep**: "Target"
+- **Edit, Write**: "File"
+- **User messages**: "Message"
+- **Assistant**: "Response"
+
+### 4. go-session [service] (score: -0.002)
+
+[go-session] Installation
+
+```bash
+go get dappco.re/go/core/session@latest
+```
+
+### 5. go-session [convention] (score: -0.004)
+
+Commands
+
+```bash
+go test ./...          # Run all tests
+go test -v -run Name   # Run single test
+go vet ./...           # Vet the package
+```
+
+### 6. go-session [service] (score: -0.023)
+
+[go-session] Event Card Layout
+
+Each card displays:
+
+| Element | Description |
+|---------|-------------|
+| Timestamp | `HH:MM:SS` of the event |
+| Tool badge | Colour-coded tool name |
+| Input summary | Truncated to 120 characters |
+| Duration | Formatted as ms/s/min/hr |
+| Status icon | Green tick or red cross for tool calls |
+
+Clicking a card expands it to show the full input (labelled contextually as Command, Message, File, or Target) and the complete output.
+
+### 7. go-session [service] (score: -0.024)
+
+[go-session] Tape Configuration
+
+The generated tape uses these defaults:
+
+```
+FontSize 16
+Width 1400
+Height 800
+TypingSpeed 30ms
+Theme "Catppuccin Mocha"
+Shell bash
+```
+
+See also: [[Home]] | [[Session-Format]]
+
+### 8. go-session [service] (score: -0.031)
+
+[go-session] Prerequisites
+
+```bash
+go install github.com/charmbracelet/vhs@latest
+```
+
+### 9. go-session [service] (score: -0.040)
+
+[go-session] How It Works
+
+1. A VHS `.tape` script is generated from the session events
+2. The tape uses the Catppuccin Mocha theme at 1400x800 resolution
+3. Only `tool_use` events are rendered:
+   - **Bash**: Shows the command being typed, abbreviated output, and a status indicator
+   - **Read/Edit/Write**: Shows a comment line with the file path
+   - **Task**: Shows an "Agent:" comment with the task description
+4. Each event includes a brief pause for readability
+5. VHS renders the tape to the specified MP4 path
+
+### 10. go-session [service] (score: -0.044)
 
 [go-session] Core Types
 
@@ -44,100 +133,4 @@ type Event struct {
     ErrorMsg  string
 }
 ```
-
-## 4. go-session [service] (score: 0.560)
-
-[go-session] Installation
-
-```bash
-go get forge.lthn.ai/core/go-session@latest
-```
-
-## 5. go-session [service] (score: 0.557)
-
-[go-session] API Summary
-
-| Function | Description |
-|----------|-------------|
-| `ListSessions(dir)` | List all `.jsonl` sessions in a directory, sorted newest first |
-| `ParseTranscript(path)` | Parse a JSONL file into a structured `*Session` |
-| `Search(dir, query)` | Search tool events across all sessions |
-| `RenderHTML(sess, path)` | Generate self-contained HTML timeline |
-| `RenderMP4(sess, path)` | Generate MP4 video via VHS (Charmbracelet) |
-
-## 6. go-session [service] (score: 0.536)
-
-[go-session] Prerequisites
-
-```bash
-go install github.com/charmbracelet/vhs@latest
-```
-
-## 7. go-session [service] (score: 0.524)
-
-[go-session] Quick Start
-
-```go
-package main
-
-import (
-    "fmt"
-    "log"
-
-    "forge.lthn.ai/core/go-session"
-)
-
-func main() {
-    // Parse a single transcript
-    sess, err := session.ParseTranscript("~/.claude/projects/abc123.jsonl")
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Session %s: %d events over %s\n",
-        sess.ID, len(sess.Events), sess.EndTime.Sub(sess.StartTime))
-
-    // Render to interactive HTML
-    if err := session.RenderHTML(sess, "timeline.html"); err != nil {
-        log.Fatal(err)
-    }
-}
-```
-
-## 8. go-session [service] (score: 0.523)
-
-[go-session] Usage
-
-```go
-sess, err := session.ParseTranscript("session.jsonl")
-if err != nil {
-    log.Fatal(err)
-}
-
-if err := session.RenderMP4(sess, "output/session.mp4"); err != nil {
-    log.Fatal(err)
-}
-```
-
-## 9. go-session [service] (score: 0.520)
-
-[go-session] Tape Configuration
-
-The generated tape uses these defaults:
-
-```
-FontSize 16
-Width 1400
-Height 800
-TypingSpeed 30ms
-Theme "Catppuccin Mocha"
-Shell bash
-```
-
-See also: [[Home]] | [[Session-Format]]
-
-## 10. go-session [service] (score: 0.509)
-
-[go-session] Rendering
-
-go-session provides two output formats for visualising parsed sessions: a self-contained HTML timeline and an MP4 video rendered via Charmbracelet VHS.
 

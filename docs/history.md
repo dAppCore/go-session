@@ -2,7 +2,7 @@
 
 ## Origin
 
-Extracted from `forge.lthn.ai/core/go` (`pkg/session/`) on 19 February 2026. The initial extraction provided a working parser that read Claude Code JSONL transcripts into `Event` arrays and identified the seven supported tool types: Bash, Read, Edit, Write, Grep, Glob, and Task.
+Extracted from `dappco.re/go/core` (`pkg/session/`) on 19 February 2026. The initial extraction provided a working parser that read Claude Code JSONL transcripts into `Event` arrays and identified the seven supported tool types: Bash, Read, Edit, Write, Grep, Glob, and Task.
 
 ## Completed Phases
 

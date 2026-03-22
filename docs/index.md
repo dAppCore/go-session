@@ -7,14 +7,14 @@ description: Claude Code JSONL transcript parser, analytics engine, and HTML tim
 
 `go-session` parses Claude Code JSONL session transcripts into structured event arrays, computes per-tool analytics, renders self-contained HTML timelines with client-side search, and generates VHS tape scripts for MP4 video output. It has no external runtime dependencies -- stdlib only.
 
-**Module path:** `forge.lthn.ai/core/go-session`
+**Module path:** `dappco.re/go/core/session`
 **Go version:** 1.26
 **Licence:** EUPL-1.2
 
 ## Quick Start
 
 ```go
-import "forge.lthn.ai/core/go-session"
+import "dappco.re/go/core/session"
 
 // Parse a single session file
 sess, stats, err := session.ParseTranscript("/path/to/session.jsonl")

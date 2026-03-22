@@ -1,6 +1,12 @@
 # Recent Changes
 
-```text
+```
+fb672f3 Merge pull request '[agent/claude:sonnet] Fix CodeRabbit findings. These are mostly markdown linting i...' (#3) from agent/fix-coderabbit-findings--these-are-mostl into main
+73e627f fix(coderabbit): address markdown linting findings
+66fbb42 Merge pull request '[agent/claude:opus] DX audit and fix. 1) Review CLAUDE.md — update any outdate...' (#2) from agent/dx-audit-and-fix--1--review-claude-md into main
+7f0a7ed fix(dx): audit and fix error handling, SPDX headers, coverage, and CLAUDE.md
+11e3bb3 Merge pull request '[agent/claude:opus] DX audit and fix. 1) Review CLAUDE.md — update any outdate...' (#1) from agent/dx-audit-and-fix--1--review-claude-md into main
+c769692 fix(dx): fix coreerr.E() signatures, add SPDX headers and tests
 55ceab4 refactor(error-handling): replace fmt.Errorf and errors.New with coreerr.E()
 a07e41a chore: add .core/ and .idea/ to .gitignore
 50d1c3f docs: add CLAUDE.md project instructions
@@ -15,10 +21,4 @@ cb7b5de chore: sync workspace dependency versions
 1458694 refactor: apply go fix modernizers for Go 1.26
 5dc4078 chore: bump go directive to 1.26.0
 325fddd docs: add README with quick start and docs links
-91e7cdb Merge remote-tracking branch 'origin/main'
-3e00791 docs: graduate TODO/FINDINGS into production documentation
-1031905 feat(parser): add robustness for truncated JSONL and malformed lines
-8e91626 docs: mark Phase 3 timeline UI as complete
-9b32678 docs(todo): mark Phase 1+2 complete with commit hash a6fb934
-a6fb934 feat(parser): Phase 1+2 — parse stats, truncation detection, session analytics
 ```

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	coreerr "forge.lthn.ai/core/go-log"
+	coreerr "dappco.re/go/core/log"
 )
 
 // RenderHTML generates a self-contained HTML timeline from a session.
