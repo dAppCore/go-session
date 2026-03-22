@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	coreerr "forge.lthn.ai/core/go-log"
+	coreerr "dappco.re/go/core/log"
 )
 
 // maxScannerBuffer is the maximum line length the scanner will accept.

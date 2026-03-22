@@ -210,7 +210,7 @@ Co-Authored-By: Virgil <virgil@lethean.io>
 
 ## Module Path and Go Workspace
 
-The module path is `forge.lthn.ai/core/go-session`. If this package is used within a Go workspace, add it with:
+The module path is `dappco.re/go/core/session`. If this package is used within a Go workspace, add it with:
 
 ```bash
 go work use ./go-session
