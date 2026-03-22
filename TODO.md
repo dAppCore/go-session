@@ -1,8 +1,16 @@
-# TASK: Replace ALL fmt.Errorf and errors.New in production code with coreerr.E() from go-log. ~8 instances. Import coreerr "forge.lthn.ai/core/go-log". Run tests after.
+# TODO
 
-**Repo:** core/go-session
-**Status:** ready
+## Task
+Update go.mod require lines from forge.lthn.ai to dappco.re paths. Update versions: core v0.5.0, log v0.1.0, io v0.2.0. Update all .go import paths. Run go mod tidy and go build ./...
 
-## Objective
+> **Status:** Complete. All module paths migrated to `dappco.re/go/core/...`.
 
-Replace ALL fmt.Errorf and errors.New in production code with coreerr.E() from go-log. ~8 instances. Import coreerr "forge.lthn.ai/core/go-log". Run tests after.
+## Checklist
+- [x] Read and understand the codebase
+- [x] Implement the required changes
+- [x] Run build: `go build ./...`
+- [x] Run tests: `go test ./...`
+- [ ] Commit with conventional commit message
+
+## Context
+

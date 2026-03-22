@@ -92,7 +92,7 @@ if err := session.RenderMP4(sess, "output/session.mp4"); err != nil {
 
 The generated tape uses these defaults:
 
-```text
+```
 FontSize 16
 Width 1400
 Height 800

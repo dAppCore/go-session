@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	coreerr "forge.lthn.ai/core/go-log"
+	coreerr "dappco.re/go/core/log"
 )
 
 // RenderMP4 generates an MP4 video from session events using VHS (charmbracelet).
