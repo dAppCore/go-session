@@ -3,18 +3,15 @@ package session
 
 import (
 	"bufio"
-	"encoding/json"
-	"fmt"
 	"io"
+	"io/fs"
 	"iter"
 	"maps"
-	"os"
-	"path/filepath"
+	"path"
 	"slices"
-	"strings"
 	"time"
 
-	coreerr "dappco.re/go/core/log"
+	core "dappco.re/go/core"
 )
 
 // maxScannerBuffer is the maximum line length the scanner will accept.
@@ -50,27 +47,27 @@ func (s *Session) EventsSeq() iter.Seq[Event] {
 
 // rawEntry is the top-level structure of a Claude Code JSONL line.
 type rawEntry struct {
-	Type      string          `json:"type"`
-	Timestamp string          `json:"timestamp"`
-	SessionID string          `json:"sessionId"`
-	Message   json.RawMessage `json:"message"`
-	UserType  string          `json:"userType"`
+	Type      string  `json:"type"`
+	Timestamp string  `json:"timestamp"`
+	SessionID string  `json:"sessionId"`
+	Message   rawJSON `json:"message"`
+	UserType  string  `json:"userType"`
 }
 
 type rawMessage struct {
-	Role    string            `json:"role"`
-	Content []json.RawMessage `json:"content"`
+	Role    string    `json:"role"`
+	Content []rawJSON `json:"content"`
 }
 
 type contentBlock struct {
-	Type      string          `json:"type"`
-	Name      string          `json:"name,omitempty"`
-	ID        string          `json:"id,omitempty"`
-	Text      string          `json:"text,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
-	ToolUseID string          `json:"tool_use_id,omitempty"`
-	Content   any             `json:"content,omitempty"`
-	IsError   *bool           `json:"is_error,omitempty"`
+	Type      string  `json:"type"`
+	Name      string  `json:"name,omitempty"`
+	ID        string  `json:"id,omitempty"`
+	Text      string  `json:"text,omitempty"`
+	Input     rawJSON `json:"input,omitempty"`
+	ToolUseID string  `json:"tool_use_id,omitempty"`
+	Content   any     `json:"content,omitempty"`
+	IsError   *bool   `json:"is_error,omitempty"`
 }
 
 type bashInput struct {
@@ -128,29 +125,34 @@ func ListSessions(projectsDir string) ([]Session, error) {
 // ListSessionsSeq returns an iterator over all sessions found in the Claude projects directory.
 func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 	return func(yield func(Session) bool) {
-		matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
-		if err != nil {
-			return
-		}
+		matches := core.PathGlob(path.Join(projectsDir, "*.jsonl"))
 
 		var sessions []Session
-		for _, path := range matches {
-			base := filepath.Base(path)
-			id := strings.TrimSuffix(base, ".jsonl")
+		for _, filePath := range matches {
+			base := path.Base(filePath)
+			id := core.TrimSuffix(base, ".jsonl")
 
-			info, err := os.Stat(path)
-			if err != nil {
+			infoResult := hostFS.Stat(filePath)
+			if !infoResult.OK {
+				continue
+			}
+			info, ok := infoResult.Value.(fs.FileInfo)
+			if !ok {
 				continue
 			}
 
 			s := Session{
 				ID:   id,
-				Path: path,
+				Path: filePath,
 			}
 
 			// Quick scan for first and last timestamps
-			f, err := os.Open(path)
-			if err != nil {
+			openResult := hostFS.Open(filePath)
+			if !openResult.OK {
+				continue
+			}
+			f, ok := openResult.Value.(io.ReadCloser)
+			if !ok {
 				continue
 			}
 
@@ -159,7 +161,7 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 			var firstTS, lastTS string
 			for scanner.Scan() {
 				var entry rawEntry
-				if json.Unmarshal(scanner.Bytes(), &entry) != nil {
+				if !core.JSONUnmarshal(scanner.Bytes(), &entry).OK {
 					continue
 				}
 				if entry.Timestamp == "" {
@@ -204,21 +206,22 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 // PruneSessions deletes session files in the projects directory that were last
 // modified more than maxAge ago. Returns the number of files deleted.
 func PruneSessions(projectsDir string, maxAge time.Duration) (int, error) {
-	matches, err := filepath.Glob(filepath.Join(projectsDir, "*.jsonl"))
-	if err != nil {
-		return 0, coreerr.E("PruneSessions", "list sessions", err)
-	}
+	matches := core.PathGlob(path.Join(projectsDir, "*.jsonl"))
 
 	var deleted int
 	now := time.Now()
-	for _, path := range matches {
-		info, err := os.Stat(path)
-		if err != nil {
+	for _, filePath := range matches {
+		infoResult := hostFS.Stat(filePath)
+		if !infoResult.OK {
+			continue
+		}
+		info, ok := infoResult.Value.(fs.FileInfo)
+		if !ok {
 			continue
 		}
 
 		if now.Sub(info.ModTime()) > maxAge {
-			if err := os.Remove(path); err == nil {
+			if deleteResult := hostFS.Delete(filePath); deleteResult.OK {
 				deleted++
 			}
 		}
@@ -238,29 +241,33 @@ func (s *Session) IsExpired(maxAge time.Duration) bool {
 // FetchSession retrieves a session by ID from the projects directory.
 // It ensures the ID does not contain path traversal characters.
 func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
-	if strings.Contains(id, "..") || strings.ContainsAny(id, `/\`) {
-		return nil, nil, coreerr.E("FetchSession", "invalid session id", nil)
+	if core.Contains(id, "..") || containsAny(id, `/\`) {
+		return nil, nil, core.E("FetchSession", "invalid session id", nil)
 	}
 
-	path := filepath.Join(projectsDir, id+".jsonl")
-	return ParseTranscript(path)
+	filePath := path.Join(projectsDir, id+".jsonl")
+	return ParseTranscript(filePath)
 }
 
 // ParseTranscript reads a JSONL session file and returns structured events.
 // Malformed or truncated lines are skipped; diagnostics are reported in ParseStats.
-func ParseTranscript(path string) (*Session, *ParseStats, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, nil, coreerr.E("ParseTranscript", "open transcript", err)
+func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
+	openResult := hostFS.Open(filePath)
+	if !openResult.OK {
+		return nil, nil, core.E("ParseTranscript", "open transcript", resultError(openResult))
+	}
+	f, ok := openResult.Value.(io.ReadCloser)
+	if !ok {
+		return nil, nil, core.E("ParseTranscript", "open transcript", nil)
 	}
 	defer f.Close()
 
-	base := filepath.Base(path)
-	id := strings.TrimSuffix(base, ".jsonl")
+	base := path.Base(filePath)
+	id := core.TrimSuffix(base, ".jsonl")
 
 	sess, stats, err := parseFromReader(f, id)
 	if sess != nil {
-		sess.Path = path
+		sess.Path = filePath
 	}
 	return sess, stats, err
 }
@@ -302,7 +309,7 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 		stats.TotalLines++
 
 		raw := scanner.Text()
-		if strings.TrimSpace(raw) == "" {
+		if core.Trim(raw) == "" {
 			continue
 		}
 
@@ -310,21 +317,21 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 		lastLineFailed = false
 
 		var entry rawEntry
-		if err := json.Unmarshal([]byte(raw), &entry); err != nil {
+		if !core.JSONUnmarshalString(raw, &entry).OK {
 			stats.SkippedLines++
 			preview := raw
 			if len(preview) > 100 {
 				preview = preview[:100]
 			}
 			stats.Warnings = append(stats.Warnings,
-				fmt.Sprintf("line %d: skipped (bad JSON): %s", lineNum, preview))
+				core.Sprintf("line %d: skipped (bad JSON): %s", lineNum, preview))
 			lastLineFailed = true
 			continue
 		}
 
 		ts, err := time.Parse(time.RFC3339Nano, entry.Timestamp)
 		if err != nil {
-			stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d: bad timestamp %q: %v", lineNum, entry.Timestamp, err))
+			stats.Warnings = append(stats.Warnings, core.Sprintf("line %d: bad timestamp %q: %v", lineNum, entry.Timestamp, err))
 			continue
 		}
 
@@ -338,20 +345,20 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 		switch entry.Type {
 		case "assistant":
 			var msg rawMessage
-			if err := json.Unmarshal(entry.Message, &msg); err != nil {
-				stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d: failed to unmarshal assistant message: %v", lineNum, err))
+			if !core.JSONUnmarshal(entry.Message, &msg).OK {
+				stats.Warnings = append(stats.Warnings, core.Sprintf("line %d: failed to unmarshal assistant message", lineNum))
 				continue
 			}
 			for i, raw := range msg.Content {
 				var block contentBlock
-				if err := json.Unmarshal(raw, &block); err != nil {
-					stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d block %d: failed to unmarshal content: %v", lineNum, i, err))
+				if !core.JSONUnmarshal(raw, &block).OK {
+					stats.Warnings = append(stats.Warnings, core.Sprintf("line %d block %d: failed to unmarshal content", lineNum, i))
 					continue
 				}
 
 				switch block.Type {
 				case "text":
-					if text := strings.TrimSpace(block.Text); text != "" {
+					if text := core.Trim(block.Text); text != "" {
 						sess.Events = append(sess.Events, Event{
 							Timestamp: ts,
 							Type:      "assistant",
@@ -371,14 +378,14 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 
 		case "user":
 			var msg rawMessage
-			if err := json.Unmarshal(entry.Message, &msg); err != nil {
-				stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d: failed to unmarshal user message: %v", lineNum, err))
+			if !core.JSONUnmarshal(entry.Message, &msg).OK {
+				stats.Warnings = append(stats.Warnings, core.Sprintf("line %d: failed to unmarshal user message", lineNum))
 				continue
 			}
 			for i, raw := range msg.Content {
 				var block contentBlock
-				if err := json.Unmarshal(raw, &block); err != nil {
-					stats.Warnings = append(stats.Warnings, fmt.Sprintf("line %d block %d: failed to unmarshal content: %v", lineNum, i, err))
+				if !core.JSONUnmarshal(raw, &block).OK {
+					stats.Warnings = append(stats.Warnings, core.Sprintf("line %d block %d: failed to unmarshal content", lineNum, i))
 					continue
 				}
 
@@ -405,7 +412,7 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 					}
 
 				case "text":
-					if text := strings.TrimSpace(block.Text); text != "" {
+					if text := core.Trim(block.Text); text != "" {
 						sess.Events = append(sess.Events, Event{
 							Timestamp: ts,
 							Type:      "user",
@@ -432,14 +439,14 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	if stats.OrphanedToolCalls > 0 {
 		for id := range pendingTools {
 			stats.Warnings = append(stats.Warnings,
-				fmt.Sprintf("orphaned tool call: %s", id))
+				core.Sprintf("orphaned tool call: %s", id))
 		}
 	}
 
 	return sess, stats, nil
 }
 
-func extractToolInput(toolName string, raw json.RawMessage) string {
+func extractToolInput(toolName string, raw rawJSON) string {
 	if raw == nil {
 		return ""
 	}
@@ -447,7 +454,7 @@ func extractToolInput(toolName string, raw json.RawMessage) string {
 	switch toolName {
 	case "Bash":
 		var inp bashInput
-		if json.Unmarshal(raw, &inp) == nil {
+		if core.JSONUnmarshal(raw, &inp).OK {
 			desc := inp.Description
 			if desc != "" {
 				desc = " # " + desc
@@ -456,49 +463,49 @@ func extractToolInput(toolName string, raw json.RawMessage) string {
 		}
 	case "Read":
 		var inp readInput
-		if json.Unmarshal(raw, &inp) == nil {
+		if core.JSONUnmarshal(raw, &inp).OK {
 			return inp.FilePath
 		}
 	case "Edit":
 		var inp editInput
-		if json.Unmarshal(raw, &inp) == nil {
-			return fmt.Sprintf("%s (edit)", inp.FilePath)
+		if core.JSONUnmarshal(raw, &inp).OK {
+			return core.Sprintf("%s (edit)", inp.FilePath)
 		}
 	case "Write":
 		var inp writeInput
-		if json.Unmarshal(raw, &inp) == nil {
-			return fmt.Sprintf("%s (%d bytes)", inp.FilePath, len(inp.Content))
+		if core.JSONUnmarshal(raw, &inp).OK {
+			return core.Sprintf("%s (%d bytes)", inp.FilePath, len(inp.Content))
 		}
 	case "Grep":
 		var inp grepInput
-		if json.Unmarshal(raw, &inp) == nil {
+		if core.JSONUnmarshal(raw, &inp).OK {
 			path := inp.Path
 			if path == "" {
 				path = "."
 			}
-			return fmt.Sprintf("/%s/ in %s", inp.Pattern, path)
+			return core.Sprintf("/%s/ in %s", inp.Pattern, path)
 		}
 	case "Glob":
 		var inp globInput
-		if json.Unmarshal(raw, &inp) == nil {
+		if core.JSONUnmarshal(raw, &inp).OK {
 			return inp.Pattern
 		}
 	case "Task":
 		var inp taskInput
-		if json.Unmarshal(raw, &inp) == nil {
+		if core.JSONUnmarshal(raw, &inp).OK {
 			desc := inp.Description
 			if desc == "" {
 				desc = truncate(inp.Prompt, 80)
 			}
-			return fmt.Sprintf("[%s] %s", inp.SubagentType, desc)
+			return core.Sprintf("[%s] %s", inp.SubagentType, desc)
 		}
 	}
 
 	// Fallback: show raw JSON keys
 	var m map[string]any
-	if json.Unmarshal(raw, &m) == nil {
+	if core.JSONUnmarshal(raw, &m).OK {
 		parts := slices.Sorted(maps.Keys(m))
-		return strings.Join(parts, ", ")
+		return core.Join(", ", parts...)
 	}
 
 	return ""
@@ -517,13 +524,13 @@ func extractResultContent(content any) string {
 				}
 			}
 		}
-		return strings.Join(parts, "\n")
+		return core.Join("\n", parts...)
 	case map[string]any:
 		if text, ok := v["text"].(string); ok {
 			return text
 		}
 	}
-	return fmt.Sprintf("%v", content)
+	return core.Sprint(content)
 }
 
 func truncate(s string, max int) string {

@@ -3,14 +3,12 @@ package session
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+	"path"
+	"syscall"
 	"testing"
 	"time"
 
+	core "dappco.re/go/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,8 +23,11 @@ func ts(offsetSec int) string {
 
 // jsonlLine marshals an arbitrary map to a single JSONL line.
 func jsonlLine(m map[string]any) string {
-	b, _ := json.Marshal(m)
-	return string(b)
+	marshalResult := core.JSONMarshal(m)
+	if !marshalResult.OK {
+		panic(resultError(marshalResult))
+	}
+	return string(marshalResult.Value.([]byte))
 }
 
 // userTextEntry creates a JSONL line for a user text message.
@@ -103,10 +104,17 @@ func toolResultEntry(timestamp, toolUseID string, content any, isError bool) str
 // writeJSONL writes lines to a temp .jsonl file and returns its path.
 func writeJSONL(t *testing.T, dir string, name string, lines ...string) string {
 	t.Helper()
-	path := filepath.Join(dir, name)
-	err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0644)
-	require.NoError(t, err)
-	return path
+	filePath := path.Join(dir, name)
+	writeResult := hostFS.Write(filePath, core.Concat(core.Join("\n", lines...), "\n"))
+	require.True(t, writeResult.OK)
+	return filePath
+}
+
+func setFileTimes(filePath string, atime, mtime time.Time) error {
+	return syscall.UtimesNano(filePath, []syscall.Timespec{
+		syscall.NsecToTimespec(atime.UnixNano()),
+		syscall.NsecToTimespec(mtime.UnixNano()),
+	})
 }
 
 // --- ParseTranscript tests ---
@@ -255,7 +263,8 @@ func TestParseTranscript_EmptyFile_Bad(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "empty.jsonl")
 	// Write a truly empty file
-	require.NoError(t, os.WriteFile(path, []byte(""), 0644))
+	writeResult := hostFS.Write(path, "")
+	require.True(t, writeResult.OK)
 
 	sess, _, err := ParseTranscript(path)
 	require.NoError(t, err)
@@ -310,13 +319,13 @@ func TestParseTranscript_LargeSession_Good(t *testing.T) {
 
 	// Generate 1000+ tool call pairs
 	for i := range 1100 {
-		toolID := fmt.Sprintf("tool-%d", i)
+		toolID := core.Sprintf("tool-%d", i)
 		offset := (i * 2) + 1
 		lines = append(lines,
 			toolUseEntry(ts(offset), "Bash", toolID, map[string]any{
-				"command": fmt.Sprintf("echo %d", i),
+				"command": core.Sprintf("echo %d", i),
 			}),
-			toolResultEntry(ts(offset+1), toolID, fmt.Sprintf("output %d", i), false),
+			toolResultEntry(ts(offset+1), toolID, core.Sprintf("output %d", i), false),
 		)
 	}
 	lines = append(lines, assistantTextEntry(ts(2202), "Done"))
@@ -465,7 +474,7 @@ func TestParseTranscript_TimestampsTracked_Good(t *testing.T) {
 
 func TestParseTranscript_TextTruncation_Good(t *testing.T) {
 	dir := t.TempDir()
-	longText := strings.Repeat("x", 600)
+	longText := repeatString("x", 600)
 	path := writeJSONL(t, dir, "truncation.jsonl",
 		userTextEntry(ts(0), longText),
 	)
@@ -476,7 +485,7 @@ func TestParseTranscript_TextTruncation_Good(t *testing.T) {
 	require.Len(t, sess.Events, 1)
 	// Input should be truncated to 500 + "..."
 	assert.True(t, len(sess.Events[0].Input) <= 504, "input should be truncated")
-	assert.True(t, strings.HasSuffix(sess.Events[0].Input, "..."), "truncated text should end with ...")
+	assert.True(t, core.HasSuffix(sess.Events[0].Input, "..."), "truncated text should end with ...")
 }
 
 func TestSession_EventsSeq_Good(t *testing.T) {
@@ -631,9 +640,9 @@ func TestListSessions_NonJSONLIgnored_Good(t *testing.T) {
 		userTextEntry(ts(0), "real"),
 	)
 	// Write non-JSONL files
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# Hello"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("notes"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "data.json"), []byte("{}"), 0644))
+	require.True(t, hostFS.Write(path.Join(dir, "readme.md"), "# Hello").OK)
+	require.True(t, hostFS.Write(path.Join(dir, "notes.txt"), "notes").OK)
+	require.True(t, hostFS.Write(path.Join(dir, "data.json"), "{}").OK)
 
 	sessions, err := ListSessions(dir)
 	require.NoError(t, err)
@@ -681,67 +690,67 @@ func TestListSessions_MalformedJSONLStillListed_Bad(t *testing.T) {
 // --- extractToolInput tests ---
 
 func TestExtractToolInput_Bash_Good(t *testing.T) {
-	input := json.RawMessage(`{"command":"go test ./...","description":"run tests","timeout":120}`)
+	input := rawJSON([]byte(`{"command":"go test ./...","description":"run tests","timeout":120}`))
 	result := extractToolInput("Bash", input)
 	assert.Equal(t, "go test ./... # run tests", result)
 }
 
 func TestExtractToolInput_BashNoDescription_Good(t *testing.T) {
-	input := json.RawMessage(`{"command":"ls -la"}`)
+	input := rawJSON([]byte(`{"command":"ls -la"}`))
 	result := extractToolInput("Bash", input)
 	assert.Equal(t, "ls -la", result)
 }
 
 func TestExtractToolInput_Read_Good(t *testing.T) {
-	input := json.RawMessage(`{"file_path":"/Users/test/main.go","offset":10,"limit":50}`)
+	input := rawJSON([]byte(`{"file_path":"/Users/test/main.go","offset":10,"limit":50}`))
 	result := extractToolInput("Read", input)
 	assert.Equal(t, "/Users/test/main.go", result)
 }
 
 func TestExtractToolInput_Edit_Good(t *testing.T) {
-	input := json.RawMessage(`{"file_path":"/tmp/app.go","old_string":"foo","new_string":"bar"}`)
+	input := rawJSON([]byte(`{"file_path":"/tmp/app.go","old_string":"foo","new_string":"bar"}`))
 	result := extractToolInput("Edit", input)
 	assert.Equal(t, "/tmp/app.go (edit)", result)
 }
 
 func TestExtractToolInput_Write_Good(t *testing.T) {
-	input := json.RawMessage(`{"file_path":"/tmp/out.txt","content":"hello world"}`)
+	input := rawJSON([]byte(`{"file_path":"/tmp/out.txt","content":"hello world"}`))
 	result := extractToolInput("Write", input)
 	assert.Equal(t, "/tmp/out.txt (11 bytes)", result)
 }
 
 func TestExtractToolInput_Grep_Good(t *testing.T) {
-	input := json.RawMessage(`{"pattern":"TODO","path":"/src"}`)
+	input := rawJSON([]byte(`{"pattern":"TODO","path":"/src"}`))
 	result := extractToolInput("Grep", input)
 	assert.Equal(t, "/TODO/ in /src", result)
 }
 
 func TestExtractToolInput_GrepNoPath_Good(t *testing.T) {
-	input := json.RawMessage(`{"pattern":"FIXME"}`)
+	input := rawJSON([]byte(`{"pattern":"FIXME"}`))
 	result := extractToolInput("Grep", input)
 	assert.Equal(t, "/FIXME/ in .", result)
 }
 
 func TestExtractToolInput_Glob_Good(t *testing.T) {
-	input := json.RawMessage(`{"pattern":"**/*.go","path":"/src"}`)
+	input := rawJSON([]byte(`{"pattern":"**/*.go","path":"/src"}`))
 	result := extractToolInput("Glob", input)
 	assert.Equal(t, "**/*.go", result)
 }
 
 func TestExtractToolInput_Task_Good(t *testing.T) {
-	input := json.RawMessage(`{"prompt":"Analyse the codebase","description":"Code review","subagent_type":"research"}`)
+	input := rawJSON([]byte(`{"prompt":"Analyse the codebase","description":"Code review","subagent_type":"research"}`))
 	result := extractToolInput("Task", input)
 	assert.Equal(t, "[research] Code review", result)
 }
 
 func TestExtractToolInput_TaskNoDescription_Good(t *testing.T) {
-	input := json.RawMessage(`{"prompt":"Short prompt","subagent_type":"codegen"}`)
+	input := rawJSON([]byte(`{"prompt":"Short prompt","subagent_type":"codegen"}`))
 	result := extractToolInput("Task", input)
 	assert.Equal(t, "[codegen] Short prompt", result)
 }
 
 func TestExtractToolInput_UnknownTool_Good(t *testing.T) {
-	input := json.RawMessage(`{"alpha":"one","beta":"two"}`)
+	input := rawJSON([]byte(`{"alpha":"one","beta":"two"}`))
 	result := extractToolInput("CustomTool", input)
 	// Fallback: sorted keys
 	assert.Equal(t, "alpha, beta", result)
@@ -753,7 +762,7 @@ func TestExtractToolInput_NilInput_Bad(t *testing.T) {
 }
 
 func TestExtractToolInput_InvalidJSON_Bad(t *testing.T) {
-	input := json.RawMessage(`{broken`)
+	input := rawJSON([]byte(`{broken`))
 	result := extractToolInput("Bash", input)
 	// All unmarshals fail, including the fallback map unmarshal
 	assert.Equal(t, "", result)
@@ -889,7 +898,7 @@ func TestParseStats_OrphanedToolCalls_Good(t *testing.T) {
 	// Warnings should mention orphaned tool IDs
 	var orphanWarnings int
 	for _, w := range stats.Warnings {
-		if strings.Contains(w, "orphaned tool call") {
+		if core.Contains(w, "orphaned tool call") {
 			orphanWarnings++
 		}
 	}
@@ -902,8 +911,8 @@ func TestParseStats_TruncatedFinalLine_Good(t *testing.T) {
 	truncatedLine := `{"type":"assi`
 
 	// Write without trailing newline after truncated line
-	path := filepath.Join(dir, "truncfinal.jsonl")
-	require.NoError(t, os.WriteFile(path, []byte(validLine+"\n"+truncatedLine+"\n"), 0644))
+	path := path.Join(dir, "truncfinal.jsonl")
+	require.True(t, hostFS.Write(path, validLine+"\n"+truncatedLine+"\n").OK)
 
 	_, stats, err := ParseTranscript(path)
 	require.NoError(t, err)
@@ -914,7 +923,7 @@ func TestParseStats_TruncatedFinalLine_Good(t *testing.T) {
 	// Should detect truncated final line
 	var foundTruncated bool
 	for _, w := range stats.Warnings {
-		if strings.Contains(w, "truncated final line") {
+		if core.Contains(w, "truncated final line") {
 			foundTruncated = true
 		}
 	}
@@ -926,8 +935,8 @@ func TestParseStats_FileEndingMidJSON_Good(t *testing.T) {
 	validLine := userTextEntry(ts(0), "Hello")
 	midJSON := `{"type":"assistant","timestamp":"2026-02-20T10:00:01Z","sessionId":"test","message":{"role":"assi`
 
-	path := filepath.Join(dir, "midjson.jsonl")
-	require.NoError(t, os.WriteFile(path, []byte(validLine+"\n"+midJSON+"\n"), 0644))
+	path := path.Join(dir, "midjson.jsonl")
+	require.True(t, hostFS.Write(path, validLine+"\n"+midJSON+"\n").OK)
 
 	sess, stats, err := ParseTranscript(path)
 	require.NoError(t, err)
@@ -938,7 +947,7 @@ func TestParseStats_FileEndingMidJSON_Good(t *testing.T) {
 
 	var foundTruncated bool
 	for _, w := range stats.Warnings {
-		if strings.Contains(w, "truncated final line") {
+		if core.Contains(w, "truncated final line") {
 			foundTruncated = true
 		}
 	}
@@ -950,8 +959,8 @@ func TestParseStats_CompleteFileNoTrailingNewline_Good(t *testing.T) {
 	line := userTextEntry(ts(0), "Hello")
 
 	// Write without trailing newline — should still parse fine
-	path := filepath.Join(dir, "nonewline.jsonl")
-	require.NoError(t, os.WriteFile(path, []byte(line), 0644))
+	path := path.Join(dir, "nonewline.jsonl")
+	require.True(t, hostFS.Write(path, line).OK)
 
 	sess, stats, err := ParseTranscript(path)
 	require.NoError(t, err)
@@ -965,7 +974,7 @@ func TestParseStats_CompleteFileNoTrailingNewline_Good(t *testing.T) {
 	// No truncation warning since the line parsed successfully
 	var foundTruncated bool
 	for _, w := range stats.Warnings {
-		if strings.Contains(w, "truncated final line") {
+		if core.Contains(w, "truncated final line") {
 			foundTruncated = true
 		}
 	}
@@ -975,7 +984,7 @@ func TestParseStats_CompleteFileNoTrailingNewline_Good(t *testing.T) {
 func TestParseStats_WarningPreviewTruncated_Good(t *testing.T) {
 	dir := t.TempDir()
 	// A malformed line longer than 100 chars
-	longBadLine := `{` + strings.Repeat("x", 200)
+	longBadLine := `{` + repeatString("x", 200)
 	path := writeJSONL(t, dir, "longbad.jsonl",
 		longBadLine,
 		userTextEntry(ts(0), "Valid"),
@@ -995,11 +1004,11 @@ func TestParseStats_WarningPreviewTruncated_Good(t *testing.T) {
 
 func TestParseTranscriptReader_MinimalValid_Good(t *testing.T) {
 	// Parse directly from an in-memory reader.
-	data := strings.Join([]string{
+	data := core.Join("\n", []string{
 		userTextEntry(ts(0), "hello"),
 		assistantTextEntry(ts(1), "world"),
-	}, "\n") + "\n"
-	reader := strings.NewReader(data)
+	}...) + "\n"
+	reader := core.NewReader(data)
 
 	sess, stats, err := ParseTranscriptReader(reader, "stream-session")
 	require.NoError(t, err)
@@ -1017,13 +1026,13 @@ func TestParseTranscriptReader_MinimalValid_Good(t *testing.T) {
 
 func TestParseTranscriptReader_BytesBuffer_Good(t *testing.T) {
 	// Parse from a bytes.Buffer (common streaming use case).
-	data := strings.Join([]string{
+	data := core.Join("\n", []string{
 		toolUseEntry(ts(0), "Bash", "tu-buf-1", map[string]any{
 			"command":     "echo ok",
 			"description": "test",
 		}),
 		toolResultEntry(ts(1), "tu-buf-1", "ok", false),
-	}, "\n") + "\n"
+	}...) + "\n"
 	buf := bytes.NewBufferString(data)
 
 	sess, _, err := ParseTranscriptReader(buf, "buf-session")
@@ -1034,7 +1043,7 @@ func TestParseTranscriptReader_BytesBuffer_Good(t *testing.T) {
 }
 
 func TestParseTranscriptReader_EmptyReader_Good(t *testing.T) {
-	reader := strings.NewReader("")
+	reader := core.NewReader("")
 
 	sess, stats, err := ParseTranscriptReader(reader, "empty")
 	require.NoError(t, err)
@@ -1045,9 +1054,9 @@ func TestParseTranscriptReader_EmptyReader_Good(t *testing.T) {
 
 func TestParseTranscriptReader_LargeLines_Good(t *testing.T) {
 	// Verify the scanner handles very long lines (> 64KB).
-	longText := strings.Repeat("x", 128*1024) // 128KB of text
+	longText := repeatString("x", 128*1024) // 128KB of text
 	data := userTextEntry(ts(0), longText) + "\n"
-	reader := strings.NewReader(data)
+	reader := core.NewReader(data)
 
 	sess, _, err := ParseTranscriptReader(reader, "big-session")
 	require.NoError(t, err)
@@ -1058,12 +1067,12 @@ func TestParseTranscriptReader_LargeLines_Good(t *testing.T) {
 
 func TestParseTranscriptReader_MalformedWithStats_Good(t *testing.T) {
 	// Malformed lines in a reader should still produce correct stats.
-	data := strings.Join([]string{
+	data := core.Join("\n", []string{
 		`{bad json`,
 		userTextEntry(ts(0), "valid"),
 		`also bad`,
-	}, "\n") + "\n"
-	reader := strings.NewReader(data)
+	}...) + "\n"
+	reader := core.NewReader(data)
 
 	sess, stats, err := ParseTranscriptReader(reader, "mixed")
 	require.NoError(t, err)
@@ -1074,13 +1083,13 @@ func TestParseTranscriptReader_MalformedWithStats_Good(t *testing.T) {
 
 func TestParseTranscriptReader_OrphanedTools_Good(t *testing.T) {
 	// Tool calls without results should be tracked in stats.
-	data := strings.Join([]string{
+	data := core.Join("\n", []string{
 		toolUseEntry(ts(0), "Bash", "orphan-r1", map[string]any{
 			"command": "ls",
 		}),
 		assistantTextEntry(ts(1), "No result arrived"),
-	}, "\n") + "\n"
-	reader := strings.NewReader(data)
+	}...) + "\n"
+	reader := core.NewReader(data)
 
 	_, stats, err := ParseTranscriptReader(reader, "orphan-reader")
 	require.NoError(t, err)
@@ -1218,7 +1227,7 @@ func TestParseTranscript_VeryLongLine_Ugly(t *testing.T) {
 	// A single line that exceeds the default bufio.Scanner buffer.
 	// The parser should handle this without error thanks to the enlarged buffer.
 	dir := t.TempDir()
-	huge := strings.Repeat("a", 5*1024*1024) // 5MB text
+	huge := repeatString("a", 5*1024*1024) // 5MB text
 	path := writeJSONL(t, dir, "huge_line.jsonl",
 		userTextEntry(ts(0), huge),
 	)
@@ -1322,7 +1331,7 @@ func TestPruneSessions_DeletesOldFiles_Good(t *testing.T) {
 	)
 	// Backdate the file's mtime by 2 hours.
 	oldTime := time.Now().Add(-2 * time.Hour)
-	require.NoError(t, os.Chtimes(path, oldTime, oldTime))
+	require.NoError(t, setFileTimes(path, oldTime, oldTime))
 
 	// Create a recent session file.
 	writeJSONL(t, dir, "new-session.jsonl",

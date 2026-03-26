@@ -2,7 +2,6 @@
 package session
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -201,19 +200,19 @@ func TestAnalyse_TokenEstimation_Good(t *testing.T) {
 		Events: []Event{
 			{
 				Type:  "user",
-				Input: strings.Repeat("a", 400), // 100 tokens
+				Input: repeatString("a", 400), // 100 tokens
 			},
 			{
 				Type:     "tool_use",
 				Tool:     "Bash",
-				Input:    strings.Repeat("b", 80),  // 20 tokens
-				Output:   strings.Repeat("c", 200), // 50 tokens
+				Input:    repeatString("b", 80),  // 20 tokens
+				Output:   repeatString("c", 200), // 50 tokens
 				Duration: time.Second,
 				Success:  true,
 			},
 			{
 				Type:  "assistant",
-				Input: strings.Repeat("d", 120), // 30 tokens
+				Input: repeatString("d", 120), // 30 tokens
 			},
 		},
 	}

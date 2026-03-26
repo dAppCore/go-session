@@ -2,11 +2,11 @@
 package session
 
 import (
-	"fmt"
 	"maps"
 	"slices"
-	"strings"
 	"time"
+
+	core "dappco.re/go/core"
 )
 
 // SessionAnalytics holds computed metrics for a parsed session.
@@ -98,31 +98,31 @@ func Analyse(sess *Session) *SessionAnalytics {
 
 // FormatAnalytics returns a tabular text summary suitable for CLI display.
 func FormatAnalytics(a *SessionAnalytics) string {
-	var b strings.Builder
+	b := core.NewBuilder()
 
 	b.WriteString("Session Analytics\n")
-	b.WriteString(strings.Repeat("=", 50) + "\n\n")
+	b.WriteString(repeatString("=", 50) + "\n\n")
 
-	b.WriteString(fmt.Sprintf("  Duration:       %s\n", formatDuration(a.Duration)))
-	b.WriteString(fmt.Sprintf("  Active Time:    %s\n", formatDuration(a.ActiveTime)))
-	b.WriteString(fmt.Sprintf("  Events:         %d\n", a.EventCount))
-	b.WriteString(fmt.Sprintf("  Success Rate:   %.1f%%\n", a.SuccessRate*100))
-	b.WriteString(fmt.Sprintf("  Est. Input Tk:  %d\n", a.EstimatedInputTokens))
-	b.WriteString(fmt.Sprintf("  Est. Output Tk: %d\n", a.EstimatedOutputTokens))
+	b.WriteString(core.Sprintf("  Duration:       %s\n", formatDuration(a.Duration)))
+	b.WriteString(core.Sprintf("  Active Time:    %s\n", formatDuration(a.ActiveTime)))
+	b.WriteString(core.Sprintf("  Events:         %d\n", a.EventCount))
+	b.WriteString(core.Sprintf("  Success Rate:   %.1f%%\n", a.SuccessRate*100))
+	b.WriteString(core.Sprintf("  Est. Input Tk:  %d\n", a.EstimatedInputTokens))
+	b.WriteString(core.Sprintf("  Est. Output Tk: %d\n", a.EstimatedOutputTokens))
 
 	if len(a.ToolCounts) > 0 {
 		b.WriteString("\n  Tool Breakdown\n")
-		b.WriteString("  " + strings.Repeat("-", 48) + "\n")
-		b.WriteString(fmt.Sprintf("  %-14s %6s %6s %10s %10s\n",
+		b.WriteString("  " + repeatString("-", 48) + "\n")
+		b.WriteString(core.Sprintf("  %-14s %6s %6s %10s %10s\n",
 			"Tool", "Calls", "Errors", "Avg", "Max"))
-		b.WriteString("  " + strings.Repeat("-", 48) + "\n")
+		b.WriteString("  " + repeatString("-", 48) + "\n")
 
 		// Sort tools for deterministic output
 		for _, tool := range slices.Sorted(maps.Keys(a.ToolCounts)) {
 			errors := a.ErrorCounts[tool]
 			avg := a.AvgLatency[tool]
 			max := a.MaxLatency[tool]
-			b.WriteString(fmt.Sprintf("  %-14s %6d %6d %10s %10s\n",
+			b.WriteString(core.Sprintf("  %-14s %6d %6d %10s %10s\n",
 				tool, a.ToolCounts[tool], errors,
 				formatDuration(avg), formatDuration(max)))
 		}

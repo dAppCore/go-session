@@ -2,8 +2,7 @@
 package session
 
 import (
-	"os"
-	"path/filepath"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -138,7 +137,8 @@ func TestSearch_SkipsNonToolEvents_Good(t *testing.T) {
 
 func TestSearch_NonJSONLIgnored_Good(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.md"), []byte("go test"), 0644))
+	writeResult := hostFS.Write(path.Join(dir, "readme.md"), "go test")
+	require.True(t, writeResult.OK)
 
 	results, err := Search(dir, "go test")
 	require.NoError(t, err)

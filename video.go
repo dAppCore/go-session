@@ -2,48 +2,45 @@
 package session
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
+	"io/fs"
+	"path"
+	"syscall"
 
-	coreerr "dappco.re/go/core/log"
+	core "dappco.re/go/core"
 )
 
 // RenderMP4 generates an MP4 video from session events using VHS (charmbracelet).
 func RenderMP4(sess *Session, outputPath string) error {
-	if _, err := exec.LookPath("vhs"); err != nil {
-		return coreerr.E("RenderMP4", "vhs not installed (go install github.com/charmbracelet/vhs@latest)", nil)
+	vhsPath := lookupExecutable("vhs")
+	if vhsPath == "" {
+		return core.E("RenderMP4", "vhs not installed (go install github.com/charmbracelet/vhs@latest)", nil)
 	}
 
 	tape := generateTape(sess, outputPath)
 
-	tmpFile, err := os.CreateTemp("", "session-*.tape")
-	if err != nil {
-		return coreerr.E("RenderMP4", "create tape", err)
+	tmpDir := hostFS.TempDir("session-")
+	if tmpDir == "" {
+		return core.E("RenderMP4", "create tape", core.NewError("failed to create temp dir"))
 	}
-	defer os.Remove(tmpFile.Name())
+	defer hostFS.DeleteAll(tmpDir)
 
-	if _, err := tmpFile.WriteString(tape); err != nil {
-		tmpFile.Close()
-		return coreerr.E("RenderMP4", "write tape", err)
+	tapePath := path.Join(tmpDir, core.Concat(core.ID(), ".tape"))
+	writeResult := hostFS.Write(tapePath, tape)
+	if !writeResult.OK {
+		return core.E("RenderMP4", "write tape", resultError(writeResult))
 	}
-	tmpFile.Close()
 
-	cmd := exec.Command("vhs", tmpFile.Name())
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return coreerr.E("RenderMP4", "vhs render", err)
+	if err := runCommand(vhsPath, tapePath); err != nil {
+		return core.E("RenderMP4", "vhs render", err)
 	}
 
 	return nil
 }
 
 func generateTape(sess *Session, outputPath string) string {
-	var b strings.Builder
+	b := core.NewBuilder()
 
-	b.WriteString(fmt.Sprintf("Output %s\n", outputPath))
+	b.WriteString(core.Sprintf("Output %s\n", outputPath))
 	b.WriteString("Set FontSize 16\n")
 	b.WriteString("Set Width 1400\n")
 	b.WriteString("Set Height 800\n")
@@ -57,7 +54,7 @@ func generateTape(sess *Session, outputPath string) string {
 	if len(id) > 8 {
 		id = id[:8]
 	}
-	b.WriteString(fmt.Sprintf("Type \"# Session %s | %s\"\n",
+	b.WriteString(core.Sprintf("Type \"# Session %s | %s\"\n",
 		id, sess.StartTime.Format("2006-01-02 15:04")))
 	b.WriteString("Enter\n")
 	b.WriteString("Sleep 2s\n")
@@ -75,7 +72,7 @@ func generateTape(sess *Session, outputPath string) string {
 				continue
 			}
 			// Show the command
-			b.WriteString(fmt.Sprintf("Type %q\n", "$ "+cmd))
+			b.WriteString(core.Sprintf("Type %q\n", "$ "+cmd))
 			b.WriteString("Enter\n")
 
 			// Show abbreviated output
@@ -84,11 +81,11 @@ func generateTape(sess *Session, outputPath string) string {
 				output = output[:200] + "..."
 			}
 			if output != "" {
-				for line := range strings.SplitSeq(output, "\n") {
+				for _, line := range core.Split(output, "\n") {
 					if line == "" {
 						continue
 					}
-					b.WriteString(fmt.Sprintf("Type %q\n", line))
+					b.WriteString(core.Sprintf("Type %q\n", line))
 					b.WriteString("Enter\n")
 				}
 			}
@@ -104,14 +101,14 @@ func generateTape(sess *Session, outputPath string) string {
 			b.WriteString("\n")
 
 		case "Read", "Edit", "Write":
-			b.WriteString(fmt.Sprintf("Type %q\n",
-				fmt.Sprintf("# %s: %s", evt.Tool, truncate(evt.Input, 80))))
+			b.WriteString(core.Sprintf("Type %q\n",
+				core.Sprintf("# %s: %s", evt.Tool, truncate(evt.Input, 80))))
 			b.WriteString("Enter\n")
 			b.WriteString("Sleep 500ms\n")
 
 		case "Task":
-			b.WriteString(fmt.Sprintf("Type %q\n",
-				fmt.Sprintf("# Agent: %s", truncate(evt.Input, 80))))
+			b.WriteString(core.Sprintf("Type %q\n",
+				core.Sprintf("# Agent: %s", truncate(evt.Input, 80))))
 			b.WriteString("Enter\n")
 			b.WriteString("Sleep 1s\n")
 		}
@@ -123,8 +120,73 @@ func generateTape(sess *Session, outputPath string) string {
 
 func extractCommand(input string) string {
 	// Remove description suffix (after " # ")
-	if idx := strings.Index(input, " # "); idx > 0 {
+	if idx := indexOf(input, " # "); idx > 0 {
 		return input[:idx]
 	}
 	return input
+}
+
+func lookupExecutable(name string) string {
+	if name == "" {
+		return ""
+	}
+	if containsAny(name, `/\`) {
+		if isExecutablePath(name) {
+			return name
+		}
+		return ""
+	}
+
+	for _, dir := range core.Split(core.Env("PATH"), ":") {
+		if dir == "" {
+			dir = "."
+		}
+		candidate := path.Join(dir, name)
+		if isExecutablePath(candidate) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func isExecutablePath(filePath string) bool {
+	statResult := hostFS.Stat(filePath)
+	if !statResult.OK {
+		return false
+	}
+	info, ok := statResult.Value.(fs.FileInfo)
+	if !ok || info.IsDir() {
+		return false
+	}
+	return info.Mode()&0111 != 0
+}
+
+func runCommand(command string, args ...string) error {
+	argv := append([]string{command}, args...)
+	procAttr := &syscall.ProcAttr{
+		Env:   syscall.Environ(),
+		Files: []uintptr{0, 1, 2},
+	}
+
+	pid, err := syscall.ForkExec(command, argv, procAttr)
+	if err != nil {
+		return err
+	}
+
+	var status syscall.WaitStatus
+	if _, err := syscall.Wait4(pid, &status, 0, nil); err != nil {
+		return err
+	}
+
+	if status.Exited() && status.ExitStatus() == 0 {
+		return nil
+	}
+	if status.Signaled() {
+		return core.NewError(core.Sprintf("command terminated by signal %d", status.Signal()))
+	}
+	if status.Exited() {
+		return core.NewError(core.Sprintf("command exited with status %d", status.ExitStatus()))
+	}
+
+	return core.NewError("command failed")
 }

@@ -5,12 +5,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
-	"path/filepath"
+	"path"
 	"regexp"
 	"slices"
-	"strings"
 	"testing"
+
+	core "dappco.re/go/core"
 )
 
 var testNamePattern = regexp.MustCompile(`^Test[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+_(Good|Bad|Ugly)$`)
@@ -19,23 +19,25 @@ func TestConventions_BannedImports_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
 	banned := map[string]string{
-		"errors":                "use coreerr.E(op, msg, err) for package errors",
-		"github.com/pkg/errors": "use coreerr.E(op, msg, err) for package errors",
+		core.Concat("encoding", "/json"): "use dappco.re/go/core JSON helpers instead",
+		core.Concat("error", "s"):        "use core.E/op-aware errors instead",
+		core.Concat("f", "mt"):           "use dappco.re/go/core formatting helpers instead",
+		"github.com/pkg/errors":          "use coreerr.E(op, msg, err) for package errors",
+		core.Concat("o", "s"):            "use dappco.re/go/core filesystem helpers instead",
+		core.Concat("o", "s/exec"):       "use session command helpers or core process abstractions instead",
+		core.Concat("path", "/filepath"): "use path or dappco.re/go/core path helpers instead",
+		core.Concat("string", "s"):       "use dappco.re/go/core string helpers or local helpers instead",
 	}
 
 	for _, file := range files {
-		if strings.HasSuffix(file.path, "_test.go") {
-			continue
-		}
-
 		for _, spec := range file.ast.Imports {
-			path := strings.Trim(spec.Path.Value, `"`)
-			if strings.HasPrefix(path, "forge.lthn.ai/") {
-				t.Errorf("%s imports %q; use dappco.re/go/core/... paths instead", file.path, path)
+			importPath := trimQuotes(spec.Path.Value)
+			if core.HasPrefix(importPath, "forge.lthn.ai/") {
+				t.Errorf("%s imports %q; use dappco.re/go/core/... paths instead", file.path, importPath)
 				continue
 			}
-			if reason, ok := banned[path]; ok {
-				t.Errorf("%s imports %q; %s", file.path, path, reason)
+			if reason, ok := banned[importPath]; ok {
+				t.Errorf("%s imports %q; %s", file.path, importPath, reason)
 			}
 		}
 	}
@@ -45,7 +47,7 @@ func TestConventions_TestNaming_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
 	for _, file := range files {
-		if !strings.HasSuffix(file.path, "_test.go") {
+		if !core.HasSuffix(file.path, "_test.go") {
 			continue
 		}
 
@@ -54,7 +56,7 @@ func TestConventions_TestNaming_Good(t *testing.T) {
 			if !ok || fn.Recv != nil {
 				continue
 			}
-			if !strings.HasPrefix(fn.Name.Name, "Test") || fn.Name.Name == "TestMain" {
+			if !core.HasPrefix(fn.Name.Name, "Test") || fn.Name.Name == "TestMain" {
 				continue
 			}
 			if !isTestingTFunc(file, fn) {
@@ -71,7 +73,7 @@ func TestConventions_UsageComments_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
 	for _, file := range files {
-		if strings.HasSuffix(file.path, "_test.go") {
+		if core.HasSuffix(file.path, "_test.go") {
 			continue
 		}
 
@@ -121,10 +123,7 @@ type parsedFile struct {
 func parseGoFiles(t *testing.T, dir string) []parsedFile {
 	t.Helper()
 
-	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
-	if err != nil {
-		t.Fatalf("glob Go files: %v", err)
-	}
+	paths := core.PathGlob(path.Join(dir, "*.go"))
 	if len(paths) == 0 {
 		t.Fatalf("no Go files found in %s", dir)
 	}
@@ -133,15 +132,15 @@ func parseGoFiles(t *testing.T, dir string) []parsedFile {
 
 	fset := token.NewFileSet()
 	files := make([]parsedFile, 0, len(paths))
-	for _, path := range paths {
-		fileAST, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	for _, filePath := range paths {
+		fileAST, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 		if err != nil {
-			t.Fatalf("parse %s: %v", path, err)
+			t.Fatalf("parse %s: %v", filePath, err)
 		}
 
 		testingImportNames, hasTestingDotImport := testingImports(fileAST)
 		files = append(files, parsedFile{
-			path:                filepath.Base(path),
+			path:                path.Base(filePath),
 			ast:                 fileAST,
 			testingImportNames:  testingImportNames,
 			hasTestingDotImport: hasTestingDotImport,
@@ -153,9 +152,9 @@ func parseGoFiles(t *testing.T, dir string) []parsedFile {
 func TestParseGoFiles_MultiplePackages_Good(t *testing.T) {
 	dir := t.TempDir()
 
-	writeTestFile(t, filepath.Join(dir, "session.go"), "package session\n")
-	writeTestFile(t, filepath.Join(dir, "session_external_test.go"), "package session_test\n")
-	writeTestFile(t, filepath.Join(dir, "README.md"), "# ignored\n")
+	writeTestFile(t, path.Join(dir, "session.go"), "package session\n")
+	writeTestFile(t, path.Join(dir, "session_external_test.go"), "package session_test\n")
+	writeTestFile(t, path.Join(dir, "README.md"), "# ignored\n")
 
 	files := parseGoFiles(t, dir)
 	if len(files) != 2 {
@@ -216,8 +215,8 @@ func testingImports(file *ast.File) (map[string]struct{}, bool) {
 	hasDotImport := false
 
 	for _, spec := range file.Imports {
-		path := strings.Trim(spec.Path.Value, `"`)
-		if path != "testing" {
+		importPath := trimQuotes(spec.Path.Value)
+		if importPath != "testing" {
 			continue
 		}
 		if spec.Name == nil {
@@ -290,11 +289,11 @@ func commentText(group *ast.CommentGroup) string {
 	if group == nil {
 		return ""
 	}
-	return strings.TrimSpace(group.Text())
+	return core.Trim(group.Text())
 }
 
 func hasDocPrefix(text, name string) bool {
-	if text == "" || !strings.HasPrefix(text, name) {
+	if text == "" || !core.HasPrefix(text, name) {
 		return false
 	}
 	if len(text) == len(name) {
@@ -308,8 +307,9 @@ func hasDocPrefix(text, name string) bool {
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()
 
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
+	writeResult := hostFS.Write(path, content)
+	if !writeResult.OK {
+		t.Fatalf("write %s: %v", path, resultError(writeResult))
 	}
 }
 

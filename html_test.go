@@ -2,11 +2,10 @@
 package session
 
 import (
-	"os"
-	"strings"
 	"testing"
 	"time"
 
+	core "dappco.re/go/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -57,10 +56,9 @@ func TestRenderHTML_BasicSession_Good(t *testing.T) {
 	err := RenderHTML(sess, outputPath)
 	require.NoError(t, err)
 
-	content, err := os.ReadFile(outputPath)
-	require.NoError(t, err)
-
-	html := string(content)
+	readResult := hostFS.Read(outputPath)
+	require.True(t, readResult.OK)
+	html := readResult.Value.(string)
 
 	// Basic structure checks
 	assert.Contains(t, html, "<!DOCTYPE html>")
@@ -95,10 +93,9 @@ func TestRenderHTML_EmptySession_Good(t *testing.T) {
 	err := RenderHTML(sess, outputPath)
 	require.NoError(t, err)
 
-	content, err := os.ReadFile(outputPath)
-	require.NoError(t, err)
-
-	html := string(content)
+	readResult := hostFS.Read(outputPath)
+	require.True(t, readResult.OK)
+	html := readResult.Value.(string)
 	assert.Contains(t, html, "<!DOCTYPE html>")
 	assert.Contains(t, html, "0 tool calls")
 	// Should NOT contain error span
@@ -140,10 +137,9 @@ func TestRenderHTML_WithErrors_Good(t *testing.T) {
 	err := RenderHTML(sess, outputPath)
 	require.NoError(t, err)
 
-	content, err := os.ReadFile(outputPath)
-	require.NoError(t, err)
-
-	html := string(content)
+	readResult := hostFS.Read(outputPath)
+	require.True(t, readResult.OK)
+	html := readResult.Value.(string)
 	assert.Contains(t, html, "1 errors")
 	assert.Contains(t, html, `class="event error"`)
 	assert.Contains(t, html, "&#10007;") // cross mark for failed
@@ -180,10 +176,9 @@ func TestRenderHTML_SpecialCharacters_Good(t *testing.T) {
 	err := RenderHTML(sess, outputPath)
 	require.NoError(t, err)
 
-	content, err := os.ReadFile(outputPath)
-	require.NoError(t, err)
-
-	html := string(content)
+	readResult := hostFS.Read(outputPath)
+	require.True(t, readResult.OK)
+	html := readResult.Value.(string)
 
 	// Script tags should be escaped, never raw
 	assert.NotContains(t, html, "<script>alert")
@@ -224,15 +219,14 @@ func TestRenderHTML_LabelsByToolType_Good(t *testing.T) {
 	err := RenderHTML(sess, outputPath)
 	require.NoError(t, err)
 
-	content, err := os.ReadFile(outputPath)
-	require.NoError(t, err)
-
-	html := string(content)
+	readResult := hostFS.Read(outputPath)
+	require.True(t, readResult.OK)
+	html := readResult.Value.(string)
 
 	// Bash gets "Command" label
-	assert.True(t, strings.Contains(html, "Command"), "Bash events should use 'Command' label")
+	assert.True(t, core.Contains(html, "Command"), "Bash events should use 'Command' label")
 	// Read, Glob, Grep get "Target" label
-	assert.True(t, strings.Contains(html, "Target"), "Read/Glob/Grep events should use 'Target' label")
+	assert.True(t, core.Contains(html, "Target"), "Read/Glob/Grep events should use 'Target' label")
 	// Edit, Write get "File" label
-	assert.True(t, strings.Contains(html, "File"), "Edit/Write events should use 'File' label")
+	assert.True(t, core.Contains(html, "File"), "Edit/Write events should use 'File' label")
 }

@@ -2,11 +2,10 @@
 package session
 
 import (
-	"os/exec"
-	"strings"
 	"testing"
 	"time"
 
+	core "dappco.re/go/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -93,7 +92,7 @@ func TestGenerateTape_LongOutput_Good(t *testing.T) {
 				Type:    "tool_use",
 				Tool:    "Bash",
 				Input:   "cat huge.log",
-				Output:  strings.Repeat("x", 300),
+				Output:  repeatString("x", 300),
 				Success: true,
 			},
 		},
@@ -149,11 +148,11 @@ func TestGenerateTape_EmptySession_Good(t *testing.T) {
 	assert.Contains(t, tape, "Output /tmp/out.mp4")
 	assert.Contains(t, tape, "Sleep 3s")
 	// No tool events
-	lines := strings.Split(tape, "\n")
+	lines := core.Split(tape, "\n")
 	var toolLines int
 	for _, line := range lines {
-		if strings.Contains(line, "$ ") || strings.Contains(line, "# Read:") ||
-			strings.Contains(line, "# Edit:") || strings.Contains(line, "# Write:") {
+		if core.Contains(line, "$ ") || core.Contains(line, "# Read:") ||
+			core.Contains(line, "# Edit:") || core.Contains(line, "# Write:") {
 			toolLines++
 		}
 	}
@@ -192,7 +191,7 @@ func TestExtractCommand_DescriptionAtStart_Good(t *testing.T) {
 
 func TestRenderMP4_NoVHS_Ugly(t *testing.T) {
 	// Skip if vhs is actually installed (this tests the error path)
-	if _, err := exec.LookPath("vhs"); err == nil {
+	if lookupExecutable("vhs") != "" {
 		t.Skip("vhs is installed; skipping missing-vhs test")
 	}
 
