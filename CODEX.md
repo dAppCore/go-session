@@ -1,6 +1,6 @@
-# CLAUDE.md
+# CODEX.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex when working in this repository.
 
 Claude Code JSONL transcript parser, analytics engine, and HTML/video renderer. Module: `dappco.re/go/core/session`
 

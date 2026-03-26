@@ -807,13 +807,13 @@ func TestTruncate_Empty_Good(t *testing.T) {
 
 // --- helper function tests ---
 
-func TestShortID_Good(t *testing.T) {
+func TestShortID_TruncatesAndPreservesLength_Good(t *testing.T) {
 	assert.Equal(t, "abcdefgh", shortID("abcdefghijklmnop"))
 	assert.Equal(t, "short", shortID("short"))
 	assert.Equal(t, "12345678", shortID("12345678"))
 }
 
-func TestFormatDuration_Good(t *testing.T) {
+func TestFormatDuration_CommonDurations_Good(t *testing.T) {
 	assert.Equal(t, "500ms", formatDuration(500*time.Millisecond))
 	assert.Equal(t, "1.5s", formatDuration(1500*time.Millisecond))
 	assert.Equal(t, "2m30s", formatDuration(2*time.Minute+30*time.Second))
@@ -1453,5 +1453,3 @@ func TestListSessions_TruncatedFile_Good(t *testing.T) {
 }
 
 // --- PruneSessions tests ---
-
-

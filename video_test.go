@@ -174,7 +174,7 @@ func TestGenerateTape_BashEmptyCommand_Bad(t *testing.T) {
 	assert.NotContains(t, tape, `"$ "`)
 }
 
-func TestExtractCommand_Good(t *testing.T) {
+func TestExtractCommand_StripsDescriptionSuffix_Good(t *testing.T) {
 	assert.Equal(t, "ls -la", extractCommand("ls -la # list files"))
 	assert.Equal(t, "go test ./...", extractCommand("go test ./..."))
 	assert.Equal(t, "echo hello", extractCommand("echo hello"))
