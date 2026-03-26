@@ -35,7 +35,7 @@ Touch all layers: add input struct in `parser.go` → case in `extractToolInput`
 
 Tests are white-box (`package session`). Test helpers in `parser_test.go` build synthetic JSONL in-memory — no fixture files. Use `writeJSONL(t, dir, name, lines...)` and the entry builders (`toolUseEntry`, `toolResultEntry`, `userTextEntry`, `assistantTextEntry`).
 
-Naming convention: `TestFunctionName_Context_Good/Bad/Ugly` (happy path / expected errors / extreme edge cases).
+Naming convention: `TestFile_Function_Good/Bad/Ugly` (group by file, collapse the specific behaviour into the function segment, and suffix with happy path / expected errors / extreme edge cases).
 
 Coverage target: maintain ≥90.9%.
 
@@ -43,10 +43,10 @@ Coverage target: maintain ≥90.9%.
 
 - UK English throughout (colour, licence, initialise)
 - Explicit types on all function signatures and struct fields
-- Exported declarations must have Go doc comments beginning with the identifier name
+- Exported declarations must have Go doc comments beginning with the identifier name and include an `Example:` usage snippet
 - `go test ./...` and `go vet ./...` must pass before commit
 - SPDX header on all source files: `// SPDX-Licence-Identifier: EUPL-1.2`
-- Error handling: all errors must use `coreerr.E(op, msg, err)` from `dappco.re/go/core/log`, never `fmt.Errorf` or `errors.New`
+- Error handling: all package errors must use `core.E(op, msg, err)` from `dappco.re/go/core`; do not use `core.NewError`, `fmt.Errorf`, or `errors.New`
 - Banned imports in non-test Go files: `errors`, `github.com/pkg/errors`, and legacy `forge.lthn.ai/...` paths
 - Conventional commits: `type(scope): description`
 - Co-Author trailer: `Co-Authored-By: Virgil <virgil@lethean.io>`

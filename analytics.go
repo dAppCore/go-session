@@ -10,6 +10,9 @@ import (
 )
 
 // SessionAnalytics holds computed metrics for a parsed session.
+//
+// Example:
+// analytics := session.Analyse(sess)
 type SessionAnalytics struct {
 	Duration              time.Duration
 	ActiveTime            time.Duration
@@ -24,6 +27,9 @@ type SessionAnalytics struct {
 }
 
 // Analyse iterates session events and computes analytics. Pure function, no I/O.
+//
+// Example:
+// analytics := session.Analyse(sess)
 func Analyse(sess *Session) *SessionAnalytics {
 	a := &SessionAnalytics{
 		ToolCounts:  make(map[string]int),
@@ -97,6 +103,9 @@ func Analyse(sess *Session) *SessionAnalytics {
 }
 
 // FormatAnalytics returns a tabular text summary suitable for CLI display.
+//
+// Example:
+// summary := session.FormatAnalytics(analytics)
 func FormatAnalytics(a *SessionAnalytics) string {
 	b := core.NewBuilder()
 

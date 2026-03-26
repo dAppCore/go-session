@@ -13,7 +13,7 @@ import (
 	core "dappco.re/go/core"
 )
 
-var testNamePattern = regexp.MustCompile(`^Test[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+_(Good|Bad|Ugly)$`)
+var testNamePattern = regexp.MustCompile(`^Test[A-Za-z0-9]+_[A-Za-z0-9]+_(Good|Bad|Ugly)$`)
 
 func TestConventions_BannedImports_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
@@ -43,6 +43,44 @@ func TestConventions_BannedImports_Good(t *testing.T) {
 	}
 }
 
+func TestConventions_ErrorHandling_Good(t *testing.T) {
+	files := parseGoFiles(t, ".")
+
+	for _, file := range files {
+		if core.HasSuffix(file.path, "_test.go") {
+			continue
+		}
+
+		ast.Inspect(file.ast, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+
+			pkg, ok := sel.X.(*ast.Ident)
+			if !ok {
+				return true
+			}
+
+			switch {
+			case pkg.Name == "core" && sel.Sel.Name == "NewError":
+				t.Errorf("%s uses core.NewError; use core.E(op, msg, err)", file.path)
+			case pkg.Name == "fmt" && sel.Sel.Name == "Errorf":
+				t.Errorf("%s uses fmt.Errorf; use core.E(op, msg, err)", file.path)
+			case pkg.Name == "errors" && sel.Sel.Name == "New":
+				t.Errorf("%s uses errors.New; use core.E(op, msg, err)", file.path)
+			}
+
+			return true
+		})
+	}
+}
+
 func TestConventions_TestNaming_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
@@ -62,8 +100,13 @@ func TestConventions_TestNaming_Good(t *testing.T) {
 			if !isTestingTFunc(file, fn) {
 				continue
 			}
+			expectedPrefix := core.Concat("Test", testFileToken(file.path), "_")
+			if !core.HasPrefix(fn.Name.Name, expectedPrefix) {
+				t.Errorf("%s contains %s; expected prefix %s", file.path, fn.Name.Name, expectedPrefix)
+				continue
+			}
 			if !testNamePattern.MatchString(fn.Name.Name) {
-				t.Errorf("%s contains %s; expected TestFunctionName_Context_Good/Bad/Ugly", file.path, fn.Name.Name)
+				t.Errorf("%s contains %s; expected TestFile_Function_Good/Bad/Ugly", file.path, fn.Name.Name)
 			}
 		}
 	}
@@ -83,8 +126,9 @@ func TestConventions_UsageComments_Good(t *testing.T) {
 				if d.Recv != nil || !d.Name.IsExported() {
 					continue
 				}
-				if !hasDocPrefix(commentText(d.Doc), d.Name.Name) {
-					t.Errorf("%s: exported function %s needs a usage comment starting with %s", file.path, d.Name.Name, d.Name.Name)
+				text := commentText(d.Doc)
+				if !hasDocPrefix(text, d.Name.Name) || !hasUsageExample(text) {
+					t.Errorf("%s: exported function %s needs a usage comment starting with %s and containing Example:", file.path, d.Name.Name, d.Name.Name)
 				}
 			case *ast.GenDecl:
 				for i, spec := range d.Specs {
@@ -93,8 +137,9 @@ func TestConventions_UsageComments_Good(t *testing.T) {
 						if !s.Name.IsExported() {
 							continue
 						}
-						if !hasDocPrefix(commentText(typeDocGroup(d, s, i)), s.Name.Name) {
-							t.Errorf("%s: exported type %s needs a usage comment starting with %s", file.path, s.Name.Name, s.Name.Name)
+						text := commentText(typeDocGroup(d, s, i))
+						if !hasDocPrefix(text, s.Name.Name) || !hasUsageExample(text) {
+							t.Errorf("%s: exported type %s needs a usage comment starting with %s and containing Example:", file.path, s.Name.Name, s.Name.Name)
 						}
 					case *ast.ValueSpec:
 						doc := valueDocGroup(d, s, i)
@@ -102,8 +147,9 @@ func TestConventions_UsageComments_Good(t *testing.T) {
 							if !name.IsExported() {
 								continue
 							}
-							if !hasDocPrefix(commentText(doc), name.Name) {
-								t.Errorf("%s: exported declaration %s needs a usage comment starting with %s", file.path, name.Name, name.Name)
+							text := commentText(doc)
+							if !hasDocPrefix(text, name.Name) || !hasUsageExample(text) {
+								t.Errorf("%s: exported declaration %s needs a usage comment starting with %s and containing Example:", file.path, name.Name, name.Name)
 							}
 						}
 					}
@@ -149,7 +195,7 @@ func parseGoFiles(t *testing.T, dir string) []parsedFile {
 	return files
 }
 
-func TestParseGoFiles_MultiplePackages_Good(t *testing.T) {
+func TestConventions_ParseGoFilesMultiplePackages_Good(t *testing.T) {
 	dir := t.TempDir()
 
 	writeTestFile(t, path.Join(dir, "session.go"), "package session\n")
@@ -168,14 +214,14 @@ func TestParseGoFiles_MultiplePackages_Good(t *testing.T) {
 	}
 }
 
-func TestIsTestingTFunc_AliasedImport_Good(t *testing.T) {
+func TestConventions_IsTestingTFuncAliasedImport_Good(t *testing.T) {
 	fileAST, fn := parseTestFunc(t, `
 package session_test
 
 import t "testing"
 
-func TestAliasedImport_Context_Good(testcase *t.T) {}
-`, "TestAliasedImport_Context_Good")
+func TestConventions_AliasedImportContext_Good(testcase *t.T) {}
+`, "TestConventions_AliasedImportContext_Good")
 
 	names, hasDotImport := testingImports(fileAST)
 	file := parsedFile{
@@ -189,14 +235,14 @@ func TestAliasedImport_Context_Good(testcase *t.T) {}
 	}
 }
 
-func TestIsTestingTFunc_DotImport_Good(t *testing.T) {
+func TestConventions_IsTestingTFuncDotImport_Good(t *testing.T) {
 	fileAST, fn := parseTestFunc(t, `
 package session_test
 
 import . "testing"
 
-func TestDotImport_Context_Good(testcase *T) {}
-`, "TestDotImport_Context_Good")
+func TestConventions_DotImportContext_Good(testcase *T) {}
+`, "TestConventions_DotImportContext_Good")
 
 	names, hasDotImport := testingImports(fileAST)
 	file := parsedFile{
@@ -302,6 +348,26 @@ func hasDocPrefix(text, name string) bool {
 
 	next := text[len(name)]
 	return (next < 'A' || next > 'Z') && (next < 'a' || next > 'z') && (next < '0' || next > '9') && next != '_'
+}
+
+func hasUsageExample(text string) bool {
+	if text == "" {
+		return false
+	}
+	return core.HasPrefix(text, "Example:") || core.Contains(text, "\nExample:")
+}
+
+func testFileToken(filePath string) string {
+	stem := core.TrimSuffix(path.Base(filePath), "_test.go")
+	switch stem {
+	case "html":
+		return "HTML"
+	default:
+		if stem == "" {
+			return ""
+		}
+		return core.Concat(core.Upper(stem[:1]), stem[1:])
+	}
 }
 
 func writeTestFile(t *testing.T, path, content string) {

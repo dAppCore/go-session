@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAnalyse_EmptySession_Good(t *testing.T) {
+func TestAnalytics_AnalyseEmptySession_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "empty",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -30,13 +30,13 @@ func TestAnalyse_EmptySession_Good(t *testing.T) {
 	assert.Equal(t, 0, a.EstimatedOutputTokens)
 }
 
-func TestAnalyse_NilSession_Good(t *testing.T) {
+func TestAnalytics_AnalyseNilSession_Good(t *testing.T) {
 	a := Analyse(nil)
 	require.NotNil(t, a)
 	assert.Equal(t, 0, a.EventCount)
 }
 
-func TestAnalyse_SingleToolCall_Good(t *testing.T) {
+func TestAnalytics_AnalyseSingleToolCall_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "single",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -66,7 +66,7 @@ func TestAnalyse_SingleToolCall_Good(t *testing.T) {
 	assert.Equal(t, 2*time.Second, a.MaxLatency["Bash"])
 }
 
-func TestAnalyse_MixedToolsWithErrors_Good(t *testing.T) {
+func TestAnalytics_AnalyseMixedToolsWithErrors_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "mixed",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -147,7 +147,7 @@ func TestAnalyse_MixedToolsWithErrors_Good(t *testing.T) {
 	assert.Equal(t, 2100*time.Millisecond, a.ActiveTime)
 }
 
-func TestAnalyse_LatencyCalculations_Good(t *testing.T) {
+func TestAnalytics_AnalyseLatencyCalculations_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "latency",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -191,7 +191,7 @@ func TestAnalyse_LatencyCalculations_Good(t *testing.T) {
 	assert.Equal(t, 200*time.Millisecond, a.MaxLatency["Read"])
 }
 
-func TestAnalyse_TokenEstimation_Good(t *testing.T) {
+func TestAnalytics_AnalyseTokenEstimation_Good(t *testing.T) {
 	// 4 chars = ~1 token
 	sess := &Session{
 		ID:        "tokens",
@@ -225,7 +225,7 @@ func TestAnalyse_TokenEstimation_Good(t *testing.T) {
 	assert.Equal(t, 50, a.EstimatedOutputTokens)
 }
 
-func TestFormatAnalytics_Output_Good(t *testing.T) {
+func TestAnalytics_FormatAnalyticsOutput_Good(t *testing.T) {
 	a := &SessionAnalytics{
 		Duration:              5 * time.Minute,
 		ActiveTime:            2 * time.Minute,
@@ -268,7 +268,7 @@ func TestFormatAnalytics_Output_Good(t *testing.T) {
 	assert.Contains(t, output, "Tool Breakdown")
 }
 
-func TestFormatAnalytics_EmptyAnalytics_Good(t *testing.T) {
+func TestAnalytics_FormatAnalyticsEmptyAnalytics_Good(t *testing.T) {
 	a := &SessionAnalytics{
 		ToolCounts:  make(map[string]int),
 		ErrorCounts: make(map[string]int),

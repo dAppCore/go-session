@@ -10,9 +10,12 @@ import (
 )
 
 // RenderHTML generates a self-contained HTML timeline from a session.
+//
+// Example:
+// err := session.RenderHTML(sess, "/tmp/session.html")
 func RenderHTML(sess *Session, outputPath string) error {
 	if !hostFS.IsDir(path.Dir(outputPath)) {
-		return core.E("RenderHTML", "create html", core.NewError("parent directory does not exist"))
+		return core.E("RenderHTML", "parent directory does not exist", nil)
 	}
 
 	duration := sess.EndTime.Sub(sess.StartTime)

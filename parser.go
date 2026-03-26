@@ -19,6 +19,9 @@ import (
 const maxScannerBuffer = 8 * 1024 * 1024
 
 // Event represents a single action in a session timeline.
+//
+// Example:
+// evt := session.Event{Type: "tool_use", Tool: "Bash"}
 type Event struct {
 	Timestamp time.Time
 	Type      string // "tool_use", "user", "assistant", "error"
@@ -32,6 +35,9 @@ type Event struct {
 }
 
 // Session holds parsed session metadata and events.
+//
+// Example:
+// sess := &session.Session{ID: "abc123", Events: []session.Event{}}
 type Session struct {
 	ID        string
 	Path      string
@@ -41,6 +47,12 @@ type Session struct {
 }
 
 // EventsSeq returns an iterator over the session's events.
+//
+// Example:
+//
+//	for evt := range sess.EventsSeq() {
+//		_ = evt
+//	}
 func (s *Session) EventsSeq() iter.Seq[Event] {
 	return slices.Values(s.Events)
 }
@@ -110,6 +122,9 @@ type taskInput struct {
 }
 
 // ParseStats reports diagnostic information from a parse run.
+//
+// Example:
+// stats := &session.ParseStats{TotalLines: 42}
 type ParseStats struct {
 	TotalLines        int
 	SkippedLines      int
@@ -118,11 +133,20 @@ type ParseStats struct {
 }
 
 // ListSessions returns all sessions found in the Claude projects directory.
+//
+// Example:
+// sessions, err := session.ListSessions("/tmp/projects")
 func ListSessions(projectsDir string) ([]Session, error) {
 	return slices.Collect(ListSessionsSeq(projectsDir)), nil
 }
 
 // ListSessionsSeq returns an iterator over all sessions found in the Claude projects directory.
+//
+// Example:
+//
+//	for sess := range session.ListSessionsSeq("/tmp/projects") {
+//		_ = sess
+//	}
 func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 	return func(yield func(Session) bool) {
 		matches := core.PathGlob(path.Join(projectsDir, "*.jsonl"))
@@ -205,6 +229,9 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 
 // PruneSessions deletes session files in the projects directory that were last
 // modified more than maxAge ago. Returns the number of files deleted.
+//
+// Example:
+// deleted, err := session.PruneSessions("/tmp/projects", 24*time.Hour)
 func PruneSessions(projectsDir string, maxAge time.Duration) (int, error) {
 	matches := core.PathGlob(path.Join(projectsDir, "*.jsonl"))
 
@@ -231,6 +258,9 @@ func PruneSessions(projectsDir string, maxAge time.Duration) (int, error) {
 
 // IsExpired returns true if the session's end time is older than the given maxAge
 // relative to now.
+//
+// Example:
+// expired := sess.IsExpired(24 * time.Hour)
 func (s *Session) IsExpired(maxAge time.Duration) bool {
 	if s.EndTime.IsZero() {
 		return false
@@ -240,6 +270,9 @@ func (s *Session) IsExpired(maxAge time.Duration) bool {
 
 // FetchSession retrieves a session by ID from the projects directory.
 // It ensures the ID does not contain path traversal characters.
+//
+// Example:
+// sess, stats, err := session.FetchSession("/tmp/projects", "abc123")
 func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 	if core.Contains(id, "..") || containsAny(id, `/\`) {
 		return nil, nil, core.E("FetchSession", "invalid session id", nil)
@@ -251,6 +284,9 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 
 // ParseTranscript reads a JSONL session file and returns structured events.
 // Malformed or truncated lines are skipped; diagnostics are reported in ParseStats.
+//
+// Example:
+// sess, stats, err := session.ParseTranscript("/tmp/projects/abc123.jsonl")
 func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 	openResult := hostFS.Open(filePath)
 	if !openResult.OK {
@@ -258,7 +294,7 @@ func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 	}
 	f, ok := openResult.Value.(io.ReadCloser)
 	if !ok {
-		return nil, nil, core.E("ParseTranscript", "open transcript", nil)
+		return nil, nil, core.E("ParseTranscript", "unexpected file handle type", nil)
 	}
 	defer f.Close()
 
@@ -269,14 +305,24 @@ func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 	if sess != nil {
 		sess.Path = filePath
 	}
-	return sess, stats, err
+	if err != nil {
+		return sess, stats, core.E("ParseTranscript", "parse transcript", err)
+	}
+	return sess, stats, nil
 }
 
 // ParseTranscriptReader parses a JSONL session from an io.Reader, enabling
 // streaming parse without needing a file on disc. The id parameter sets
 // the session ID (since there is no file name to derive it from).
+//
+// Example:
+// sess, stats, err := session.ParseTranscriptReader(reader, "abc123")
 func ParseTranscriptReader(r io.Reader, id string) (*Session, *ParseStats, error) {
-	return parseFromReader(r, id)
+	sess, stats, err := parseFromReader(r, id)
+	if err != nil {
+		return sess, stats, core.E("ParseTranscriptReader", "parse transcript", err)
+	}
+	return sess, stats, nil
 }
 
 // parseFromReader is the shared implementation for both file-based and

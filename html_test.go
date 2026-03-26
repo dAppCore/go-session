@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRenderHTML_BasicSession_Good(t *testing.T) {
+func TestHTML_RenderHTMLBasicSession_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/output.html"
 
@@ -78,7 +78,7 @@ func TestRenderHTML_BasicSession_Good(t *testing.T) {
 	assert.Contains(t, html, "function filterEvents")
 }
 
-func TestRenderHTML_EmptySession_Good(t *testing.T) {
+func TestHTML_RenderHTMLEmptySession_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/empty.html"
 
@@ -102,7 +102,7 @@ func TestRenderHTML_EmptySession_Good(t *testing.T) {
 	assert.NotContains(t, html, "errors</span>")
 }
 
-func TestRenderHTML_WithErrors_Good(t *testing.T) {
+func TestHTML_RenderHTMLWithErrors_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/errors.html"
 
@@ -146,7 +146,7 @@ func TestRenderHTML_WithErrors_Good(t *testing.T) {
 	assert.Contains(t, html, "&#10003;") // check mark for success
 }
 
-func TestRenderHTML_SpecialCharacters_Good(t *testing.T) {
+func TestHTML_RenderHTMLSpecialCharacters_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/special.html"
 
@@ -186,7 +186,7 @@ func TestRenderHTML_SpecialCharacters_Good(t *testing.T) {
 	assert.Contains(t, html, "&amp;")
 }
 
-func TestRenderHTML_InvalidPath_Ugly(t *testing.T) {
+func TestHTML_RenderHTMLInvalidPath_Ugly(t *testing.T) {
 	sess := &Session{
 		ID:     "test",
 		Events: nil,
@@ -194,10 +194,10 @@ func TestRenderHTML_InvalidPath_Ugly(t *testing.T) {
 
 	err := RenderHTML(sess, "/nonexistent/dir/output.html")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "create html")
+	assert.Contains(t, err.Error(), "parent directory does not exist")
 }
 
-func TestRenderHTML_LabelsByToolType_Good(t *testing.T) {
+func TestHTML_RenderHTMLLabelsByToolType_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/labels.html"
 

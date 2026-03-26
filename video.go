@@ -10,6 +10,9 @@ import (
 )
 
 // RenderMP4 generates an MP4 video from session events using VHS (charmbracelet).
+//
+// Example:
+// err := session.RenderMP4(sess, "/tmp/session.mp4")
 func RenderMP4(sess *Session, outputPath string) error {
 	vhsPath := lookupExecutable("vhs")
 	if vhsPath == "" {
@@ -20,7 +23,7 @@ func RenderMP4(sess *Session, outputPath string) error {
 
 	tmpDir := hostFS.TempDir("session-")
 	if tmpDir == "" {
-		return core.E("RenderMP4", "create tape", core.NewError("failed to create temp dir"))
+		return core.E("RenderMP4", "failed to create temp dir", nil)
 	}
 	defer hostFS.DeleteAll(tmpDir)
 
@@ -170,23 +173,23 @@ func runCommand(command string, args ...string) error {
 
 	pid, err := syscall.ForkExec(command, argv, procAttr)
 	if err != nil {
-		return err
+		return core.E("runCommand", "fork exec command", err)
 	}
 
 	var status syscall.WaitStatus
 	if _, err := syscall.Wait4(pid, &status, 0, nil); err != nil {
-		return err
+		return core.E("runCommand", "wait for command", err)
 	}
 
 	if status.Exited() && status.ExitStatus() == 0 {
 		return nil
 	}
 	if status.Signaled() {
-		return core.NewError(core.Sprintf("command terminated by signal %d", status.Signal()))
+		return core.E("runCommand", core.Sprintf("command terminated by signal %d", status.Signal()), nil)
 	}
 	if status.Exited() {
-		return core.NewError(core.Sprintf("command exited with status %d", status.ExitStatus()))
+		return core.E("runCommand", core.Sprintf("command exited with status %d", status.ExitStatus()), nil)
 	}
 
-	return core.NewError("command failed")
+	return core.E("runCommand", "command failed", nil)
 }
