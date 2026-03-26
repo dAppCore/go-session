@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -15,7 +16,7 @@ import (
 var testNamePattern = regexp.MustCompile(`^Test[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+_(Good|Bad|Ugly)$`)
 
 func TestConventions_BannedImports_Good(t *testing.T) {
-	files := parsePackageFiles(t)
+	files := parseGoFiles(t, ".")
 
 	banned := map[string]string{
 		"errors":                "use coreerr.E(op, msg, err) for package errors",
@@ -41,7 +42,7 @@ func TestConventions_BannedImports_Good(t *testing.T) {
 }
 
 func TestConventions_TestNaming_Good(t *testing.T) {
-	files := parsePackageFiles(t)
+	files := parseGoFiles(t, ".")
 
 	for _, file := range files {
 		if !strings.HasSuffix(file.path, "_test.go") {
@@ -56,7 +57,7 @@ func TestConventions_TestNaming_Good(t *testing.T) {
 			if !strings.HasPrefix(fn.Name.Name, "Test") || fn.Name.Name == "TestMain" {
 				continue
 			}
-			if !isTestingTFunc(fn) {
+			if !isTestingTFunc(file, fn) {
 				continue
 			}
 			if !testNamePattern.MatchString(fn.Name.Name) {
@@ -67,7 +68,7 @@ func TestConventions_TestNaming_Good(t *testing.T) {
 }
 
 func TestConventions_UsageComments_Good(t *testing.T) {
-	files := parsePackageFiles(t)
+	files := parseGoFiles(t, ".")
 
 	for _, file := range files {
 		if strings.HasSuffix(file.path, "_test.go") {
@@ -111,45 +112,132 @@ func TestConventions_UsageComments_Good(t *testing.T) {
 }
 
 type parsedFile struct {
-	path string
-	ast  *ast.File
+	path                string
+	ast                 *ast.File
+	testingImportNames  map[string]struct{}
+	hasTestingDotImport bool
 }
 
-func parsePackageFiles(t *testing.T) []parsedFile {
+func parseGoFiles(t *testing.T, dir string) []parsedFile {
 	t.Helper()
 
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", nil, parser.ParseComments)
+	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {
-		t.Fatalf("parse package: %v", err)
+		t.Fatalf("glob Go files: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("no Go files found in %s", dir)
 	}
 
-	pkg, ok := pkgs["session"]
-	if !ok {
-		t.Fatal("package session not found")
-	}
-
-	paths := filePaths(pkg.Files)
 	slices.Sort(paths)
+
+	fset := token.NewFileSet()
 	files := make([]parsedFile, 0, len(paths))
 	for _, path := range paths {
+		fileAST, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+
+		testingImportNames, hasTestingDotImport := testingImports(fileAST)
 		files = append(files, parsedFile{
-			path: filepath.Base(path),
-			ast:  pkg.Files[path],
+			path:                filepath.Base(path),
+			ast:                 fileAST,
+			testingImportNames:  testingImportNames,
+			hasTestingDotImport: hasTestingDotImport,
 		})
 	}
 	return files
 }
 
-func filePaths(files map[string]*ast.File) []string {
-	paths := make([]string, 0, len(files))
-	for path := range files {
-		paths = append(paths, path)
+func TestParseGoFiles_MultiplePackages_Good(t *testing.T) {
+	dir := t.TempDir()
+
+	writeTestFile(t, filepath.Join(dir, "session.go"), "package session\n")
+	writeTestFile(t, filepath.Join(dir, "session_external_test.go"), "package session_test\n")
+	writeTestFile(t, filepath.Join(dir, "README.md"), "# ignored\n")
+
+	files := parseGoFiles(t, dir)
+	if len(files) != 2 {
+		t.Fatalf("expected 2 Go files, got %d", len(files))
 	}
-	return paths
+
+	names := []string{files[0].path, files[1].path}
+	slices.Sort(names)
+	if names[0] != "session.go" || names[1] != "session_external_test.go" {
+		t.Fatalf("unexpected files: %v", names)
+	}
 }
 
-func isTestingTFunc(fn *ast.FuncDecl) bool {
+func TestIsTestingTFunc_AliasedImport_Good(t *testing.T) {
+	fileAST, fn := parseTestFunc(t, `
+package session_test
+
+import t "testing"
+
+func TestAliasedImport_Context_Good(testcase *t.T) {}
+`, "TestAliasedImport_Context_Good")
+
+	names, hasDotImport := testingImports(fileAST)
+	file := parsedFile{
+		ast:                 fileAST,
+		testingImportNames:  names,
+		hasTestingDotImport: hasDotImport,
+	}
+
+	if !isTestingTFunc(file, fn) {
+		t.Fatal("expected aliased *testing.T signature to be recognised")
+	}
+}
+
+func TestIsTestingTFunc_DotImport_Good(t *testing.T) {
+	fileAST, fn := parseTestFunc(t, `
+package session_test
+
+import . "testing"
+
+func TestDotImport_Context_Good(testcase *T) {}
+`, "TestDotImport_Context_Good")
+
+	names, hasDotImport := testingImports(fileAST)
+	file := parsedFile{
+		ast:                 fileAST,
+		testingImportNames:  names,
+		hasTestingDotImport: hasDotImport,
+	}
+
+	if !isTestingTFunc(file, fn) {
+		t.Fatal("expected dot-imported *testing.T signature to be recognised")
+	}
+}
+
+func testingImports(file *ast.File) (map[string]struct{}, bool) {
+	names := make(map[string]struct{})
+	hasDotImport := false
+
+	for _, spec := range file.Imports {
+		path := strings.Trim(spec.Path.Value, `"`)
+		if path != "testing" {
+			continue
+		}
+		if spec.Name == nil {
+			names["testing"] = struct{}{}
+			continue
+		}
+		switch spec.Name.Name {
+		case ".":
+			hasDotImport = true
+		case "_":
+			continue
+		default:
+			names[spec.Name.Name] = struct{}{}
+		}
+	}
+
+	return names, hasDotImport
+}
+
+func isTestingTFunc(file parsedFile, fn *ast.FuncDecl) bool {
 	if fn.Type == nil || fn.Type.Params == nil || len(fn.Type.Params.List) != 1 {
 		return false
 	}
@@ -160,17 +248,22 @@ func isTestingTFunc(fn *ast.FuncDecl) bool {
 		return false
 	}
 
-	sel, ok := star.X.(*ast.SelectorExpr)
-	if !ok {
+	switch expr := star.X.(type) {
+	case *ast.Ident:
+		return file.hasTestingDotImport && expr.Name == "T"
+	case *ast.SelectorExpr:
+		pkg, ok := expr.X.(*ast.Ident)
+		if !ok {
+			return false
+		}
+		if expr.Sel.Name != "T" {
+			return false
+		}
+		_, ok = file.testingImportNames[pkg.Name]
+		return ok
+	default:
 		return false
 	}
-
-	pkg, ok := sel.X.(*ast.Ident)
-	if !ok {
-		return false
-	}
-
-	return pkg.Name == "testing" && sel.Sel.Name == "T"
 }
 
 func typeDocGroup(decl *ast.GenDecl, spec *ast.TypeSpec, index int) *ast.CommentGroup {
@@ -210,4 +303,32 @@ func hasDocPrefix(text, name string) bool {
 
 	next := text[len(name)]
 	return (next < 'A' || next > 'Z') && (next < 'a' || next > 'z') && (next < '0' || next > '9') && next != '_'
+}
+
+func writeTestFile(t *testing.T, path, content string) {
+	t.Helper()
+
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func parseTestFunc(t *testing.T, src, name string) (*ast.File, *ast.FuncDecl) {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	fileAST, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse test source: %v", err)
+	}
+
+	for _, decl := range fileAST.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Name.Name == name {
+			return fileAST, fn
+		}
+	}
+
+	t.Fatalf("function %s not found", name)
+	return nil, nil
 }
