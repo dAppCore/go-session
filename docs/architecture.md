@@ -239,10 +239,11 @@ Success or failure of a `tool_use` event is indicated by a Unicode check mark (U
 
 Each event is rendered as a `<div class="event">` containing:
 
-- `.event-header`: always visible; shows timestamp, tool label, truncated input (120 chars), duration, and status icon.
+- `.event-header`: always visible; shows timestamp, tool label, truncated input (120 chars), duration, status icon, and a permalink anchor.
 - `.event-body`: hidden by default; shown on click via the `toggle(i)` JavaScript function which toggles the `open` class.
 
 The arrow indicator rotates 90 degrees (CSS `transform: rotate(90deg)`) when the panel is open. Output text in `.event-body` is capped at 400px height with `overflow-y: auto`.
+If the page loads with an `#evt-N` fragment, that event is opened automatically and scrolled into view.
 
 Input label semantics vary per tool:
 

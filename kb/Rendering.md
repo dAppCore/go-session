@@ -15,6 +15,7 @@ go-session provides two output formats for visualising parsed sessions: a self-c
   - Yellow: User messages
   - Grey: Assistant responses
   - Red border: Failed tool calls
+- **Permalinks** on each event card for direct `#evt-N` links
 
 ### Usage
 

@@ -71,6 +71,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 .event-header .input { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-header .dur { color: var(--dim); font-size: 11px; min-width: 50px; text-align: right; }
 .event-header .status { font-size: 14px; min-width: 20px; text-align: center; }
+.event-header .permalink { color: var(--dim); font-size: 12px; min-width: 16px; text-align: center; text-decoration: none; }
+.event-header .permalink:hover { color: var(--accent); }
 .event-header .arrow { color: var(--dim); font-size: 10px; transition: transform 0.15s; min-width: 16px; }
 .event.open .arrow { transform: rotate(90deg); }
 .event-body { display: none; padding: 12px; background: var(--bg); border-top: 1px solid var(--border); }
@@ -160,6 +162,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
     <span class="input">%s</span>
     <span class="dur">%s</span>
     <span class="status">%s</span>
+    <a class="permalink" href="#evt-%d" aria-label="Direct link to this event" onclick="event.stopPropagation()">#</a>
   </div>
   <div class="event-body">
 `,
@@ -174,7 +177,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 			html.EscapeString(toolLabel),
 			html.EscapeString(truncate(evt.Input, 120)),
 			durStr,
-			statusIcon))
+			statusIcon,
+			i))
 
 		if evt.Input != "" {
 			label := "Command"
@@ -227,12 +231,22 @@ function filterEvents() {
     el.classList.toggle('hidden', !show);
   });
 }
+function openHashEvent() {
+  const hash = window.location.hash;
+  if (!hash || !hash.startsWith('#evt-')) return;
+  const el = document.getElementById(hash.slice(1));
+  if (!el) return;
+  el.classList.add('open');
+  el.scrollIntoView({block: 'start'});
+}
 document.addEventListener('keydown', e => {
   if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
     e.preventDefault();
     document.getElementById('search').focus();
   }
 });
+window.addEventListener('hashchange', openHashEvent);
+document.addEventListener('DOMContentLoaded', openHashEvent);
 </script>
 </body>
 </html>

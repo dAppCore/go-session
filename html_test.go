@@ -73,6 +73,8 @@ func TestHTML_RenderHTMLBasicSession_Good(t *testing.T) {
 	assert.Contains(t, html, "Claude") // assistant event label
 	assert.Contains(t, html, "Bash")
 	assert.Contains(t, html, "Read")
+	assert.Contains(t, html, `href="#evt-0"`)
+	assert.Contains(t, html, "openHashEvent")
 	// Should contain JS for toggle and filter
 	assert.Contains(t, html, "function toggle")
 	assert.Contains(t, html, "function filterEvents")
