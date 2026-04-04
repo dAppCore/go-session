@@ -3,7 +3,7 @@ module dappco.re/go/core/session
 go 1.26.0
 
 require (
-	dappco.re/go/core/log v0.1.0
+	dappco.re/go/core v0.8.0-alpha.1
 	github.com/stretchr/testify v1.11.1
 )
 

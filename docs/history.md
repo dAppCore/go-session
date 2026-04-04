@@ -76,5 +76,5 @@ The following have been identified as potential improvements but are not current
 - **Parallel search**: fan out `ParseTranscript` calls across goroutines with a result channel to reduce wall time for large directories.
 - **Persistent index**: a lightweight SQLite index or binary cache per session file to avoid re-parsing on every `Search` or `ListSessions` call.
 - **Additional tool types**: the parser's `extractToolInput` fallback handles any unknown tool by listing its JSON keys. Dedicated handling could be added for `WebFetch`, `WebSearch`, `NotebookEdit`, and other tools that appear in Claude Code sessions.
-- **HTML export options**: configurable truncation limits, optional full-output display, and per-event direct links (anchor IDs already exist as `evt-{i}`).
+- **HTML export options**: configurable truncation limits and optional full-output display remain open; per-event direct links are now available via `#evt-{i}` permalinks.
 - **VHS alternative**: a pure-Go terminal animation renderer to eliminate the `vhs` dependency for MP4 output.

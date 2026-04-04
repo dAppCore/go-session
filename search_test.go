@@ -2,15 +2,14 @@
 package session
 
 import (
-	"os"
-	"path/filepath"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSearch_EmptyDir_Good(t *testing.T) {
+func TestSearch_SearchEmptyDir_Good(t *testing.T) {
 	dir := t.TempDir()
 
 	results, err := Search(dir, "anything")
@@ -18,7 +17,7 @@ func TestSearch_EmptyDir_Good(t *testing.T) {
 	assert.Empty(t, results)
 }
 
-func TestSearch_NoMatches_Good(t *testing.T) {
+func TestSearch_SearchNoMatches_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
 		toolUseEntry(ts(0), "Bash", "tool-1", map[string]any{
@@ -32,7 +31,7 @@ func TestSearch_NoMatches_Good(t *testing.T) {
 	assert.Empty(t, results)
 }
 
-func TestSearch_SingleMatch_Good(t *testing.T) {
+func TestSearch_SearchSingleMatch_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
 		toolUseEntry(ts(0), "Bash", "tool-1", map[string]any{
@@ -50,7 +49,7 @@ func TestSearch_SingleMatch_Good(t *testing.T) {
 	assert.Contains(t, results[0].Match, "go test")
 }
 
-func TestSearchSeq_SingleMatch_Good(t *testing.T) {
+func TestSearch_SearchSeqSingleMatch_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
 		toolUseEntry(ts(0), "Bash", "tool-1", map[string]any{
@@ -69,7 +68,7 @@ func TestSearchSeq_SingleMatch_Good(t *testing.T) {
 	assert.Equal(t, "Bash", results[0].Tool)
 }
 
-func TestSearch_MultipleMatches_Good(t *testing.T) {
+func TestSearch_SearchMultipleMatches_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session1.jsonl",
 		toolUseEntry(ts(0), "Bash", "t1", map[string]any{
@@ -93,7 +92,7 @@ func TestSearch_MultipleMatches_Good(t *testing.T) {
 	assert.Len(t, results, 3, "should find matches across both sessions")
 }
 
-func TestSearch_CaseInsensitive_Good(t *testing.T) {
+func TestSearch_SearchCaseInsensitive_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
 		toolUseEntry(ts(0), "Bash", "t1", map[string]any{
@@ -107,7 +106,7 @@ func TestSearch_CaseInsensitive_Good(t *testing.T) {
 	assert.Len(t, results, 1, "search should be case-insensitive")
 }
 
-func TestSearch_MatchesInOutput_Good(t *testing.T) {
+func TestSearch_SearchMatchesInOutput_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
 		toolUseEntry(ts(0), "Bash", "t1", map[string]any{
@@ -123,7 +122,7 @@ func TestSearch_MatchesInOutput_Good(t *testing.T) {
 	assert.Contains(t, results[0].Match, "cat log.txt")
 }
 
-func TestSearch_SkipsNonToolEvents_Good(t *testing.T) {
+func TestSearch_SearchSkipsNonToolEvents_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
 		userTextEntry(ts(0), "Please search for something"),
@@ -136,16 +135,17 @@ func TestSearch_SkipsNonToolEvents_Good(t *testing.T) {
 	assert.Empty(t, results, "should only match tool_use events, not user/assistant text")
 }
 
-func TestSearch_NonJSONLIgnored_Good(t *testing.T) {
+func TestSearch_SearchNonJSONLIgnored_Good(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.md"), []byte("go test"), 0644))
+	writeResult := hostFS.Write(path.Join(dir, "readme.md"), "go test")
+	require.True(t, writeResult.OK)
 
 	results, err := Search(dir, "go test")
 	require.NoError(t, err)
 	assert.Empty(t, results, "non-JSONL files should be ignored")
 }
 
-func TestSearch_MalformedSessionSkipped_Bad(t *testing.T) {
+func TestSearch_SearchMalformedSessionSkipped_Bad(t *testing.T) {
 	dir := t.TempDir()
 
 	// One broken session and one valid session

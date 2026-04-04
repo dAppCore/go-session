@@ -138,6 +138,17 @@ Both `go vet ./...` and `golangci-lint run ./...` must be clean before committin
 - Use explicit types on struct fields and function signatures.
 - Avoid `interface{}` in public APIs; use typed parameters where possible.
 - Handle all errors explicitly; do not use blank `_` for error returns in non-test code.
+- Exported declarations must have Go doc comments beginning with the identifier name.
+
+### Imports and Error Handling
+
+- Do not import `errors` or `github.com/pkg/errors` in non-test Go files; use `coreerr.E(op, msg, err)` from `dappco.re/go/core/log`.
+- Do not reintroduce legacy `forge.lthn.ai/...` module paths; use `dappco.re/go/core/...` imports.
+
+### Test Naming
+
+Test functions should follow `TestFunctionName_Context_Good/Bad/Ugly`.
+The conventions test suite checks test naming, banned imports, and exported usage comments during `go test ./...`.
 
 ### File Headers
 

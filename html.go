@@ -2,22 +2,21 @@
 package session
 
 import (
-	"fmt"
 	"html"
-	"os"
-	"strings"
+	"path"
 	"time"
 
-	coreerr "dappco.re/go/core/log"
+	core "dappco.re/go/core"
 )
 
 // RenderHTML generates a self-contained HTML timeline from a session.
+//
+// Example:
+// err := session.RenderHTML(sess, "/tmp/session.html")
 func RenderHTML(sess *Session, outputPath string) error {
-	f, err := os.Create(outputPath)
-	if err != nil {
-		return coreerr.E("RenderHTML", "create html", err)
+	if !hostFS.IsDir(path.Dir(outputPath)) {
+		return core.E("RenderHTML", "parent directory does not exist", nil)
 	}
-	defer f.Close()
 
 	duration := sess.EndTime.Sub(sess.StartTime)
 	toolCount := 0
@@ -31,7 +30,8 @@ func RenderHTML(sess *Session, outputPath string) error {
 		}
 	}
 
-	fmt.Fprintf(f, `<!DOCTYPE html>
+	b := core.NewBuilder()
+	b.WriteString(core.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -71,6 +71,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 .event-header .input { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-header .dur { color: var(--dim); font-size: 11px; min-width: 50px; text-align: right; }
 .event-header .status { font-size: 14px; min-width: 20px; text-align: center; }
+.event-header .permalink { color: var(--dim); font-size: 12px; min-width: 16px; text-align: center; text-decoration: none; }
+.event-header .permalink:hover { color: var(--accent); }
 .event-header .arrow { color: var(--dim); font-size: 10px; transition: transform 0.15s; min-width: 16px; }
 .event.open .arrow { transform: rotate(90deg); }
 .event-body { display: none; padding: 12px; background: var(--bg); border-top: 1px solid var(--border); }
@@ -93,14 +95,14 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 		shortID(sess.ID), shortID(sess.ID),
 		sess.StartTime.Format("2006-01-02 15:04:05"),
 		formatDuration(duration),
-		toolCount)
+		toolCount))
 
 	if errorCount > 0 {
-		fmt.Fprintf(f, `
-      <span class="err">%d errors</span>`, errorCount)
+		b.WriteString(core.Sprintf(`
+      <span class="err">%d errors</span>`, errorCount))
 	}
 
-	fmt.Fprintf(f, `
+	b.WriteString(`
     </div>
   </div>
   <div class="search">
@@ -108,7 +110,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
     <select id="filter" onchange="filterEvents()">
       <option value="all">All events</option>
       <option value="tool_use">Tool calls only</option>
-      <option value="errors">Errors only</option>
+      <option value='errors'>Errors only</option>
       <option value="Bash">Bash only</option>
       <option value="user">User messages</option>
     </select>
@@ -119,7 +121,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 
 	var i int
 	for evt := range sess.EventsSeq() {
-		toolClass := strings.ToLower(evt.Tool)
+		toolClass := core.Lower(evt.Tool)
 		if evt.Type == "user" {
 			toolClass = "user"
 		} else if evt.Type == "assistant" {
@@ -152,7 +154,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 			durStr = formatDuration(evt.Duration)
 		}
 
-		fmt.Fprintf(f, `<div class="event%s" data-type="%s" data-tool="%s" data-text="%s" id="evt-%d">
+		b.WriteString(core.Sprintf(`<div class="event%s" data-type="%s" data-tool="%s" data-text="%s" id="evt-%d">
   <div class="event-header" onclick="toggle(%d)">
     <span class="arrow">&#9654;</span>
     <span class="time">%s</span>
@@ -160,13 +162,14 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
     <span class="input">%s</span>
     <span class="dur">%s</span>
     <span class="status">%s</span>
+    <a class="permalink" href="#evt-%d" aria-label="Direct link to this event" onclick="event.stopPropagation()">#</a>
   </div>
   <div class="event-body">
 `,
 			errorClass,
 			evt.Type,
 			evt.Tool,
-			html.EscapeString(strings.ToLower(evt.Input+" "+evt.Output)),
+			html.EscapeString(core.Lower(core.Concat(evt.Input, " ", evt.Output))),
 			i,
 			i,
 			evt.Timestamp.Format("15:04:05"),
@@ -174,7 +177,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 			html.EscapeString(toolLabel),
 			html.EscapeString(truncate(evt.Input, 120)),
 			durStr,
-			statusIcon)
+			statusIcon,
+			i))
 
 		if evt.Input != "" {
 			label := "Command"
@@ -187,8 +191,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 			} else if evt.Tool == "Edit" || evt.Tool == "Write" {
 				label = "File"
 			}
-			fmt.Fprintf(f, `    <div class="section"><div class="label">%s</div><pre>%s</pre></div>
-`, label, html.EscapeString(evt.Input))
+			b.WriteString(core.Sprintf(`    <div class="section"><div class="label">%s</div><pre>%s</pre></div>
+`, label, html.EscapeString(evt.Input)))
 		}
 
 		if evt.Output != "" {
@@ -196,17 +200,17 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 			if !evt.Success {
 				outClass = "output err"
 			}
-			fmt.Fprintf(f, `    <div class="section"><div class="label">Output</div><pre class="%s">%s</pre></div>
-`, outClass, html.EscapeString(evt.Output))
+			b.WriteString(core.Sprintf(`    <div class="section"><div class="label">Output</div><pre class="%s">%s</pre></div>
+`, outClass, html.EscapeString(evt.Output)))
 		}
 
-		fmt.Fprint(f, `  </div>
+		b.WriteString(`  </div>
 </div>
 `)
 		i++
 	}
 
-	fmt.Fprint(f, `</div>
+	b.WriteString(`</div>
 <script>
 function toggle(i) {
   document.getElementById('evt-'+i).classList.toggle('open');
@@ -227,16 +231,31 @@ function filterEvents() {
     el.classList.toggle('hidden', !show);
   });
 }
+function openHashEvent() {
+  const hash = window.location.hash;
+  if (!hash || !hash.startsWith('#evt-')) return;
+  const el = document.getElementById(hash.slice(1));
+  if (!el) return;
+  el.classList.add('open');
+  el.scrollIntoView({block: 'start'});
+}
 document.addEventListener('keydown', e => {
   if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
     e.preventDefault();
     document.getElementById('search').focus();
   }
 });
+window.addEventListener('hashchange', openHashEvent);
+document.addEventListener('DOMContentLoaded', openHashEvent);
 </script>
 </body>
 </html>
 `)
+
+	writeResult := hostFS.Write(outputPath, b.String())
+	if !writeResult.OK {
+		return core.E("RenderHTML", "write html", resultError(writeResult))
+	}
 
 	return nil
 }
@@ -250,13 +269,13 @@ func shortID(id string) string {
 
 func formatDuration(d time.Duration) string {
 	if d < time.Second {
-		return fmt.Sprintf("%dms", d.Milliseconds())
+		return core.Sprintf("%dms", d.Milliseconds())
 	}
 	if d < time.Minute {
-		return fmt.Sprintf("%.1fs", d.Seconds())
+		return core.Sprintf("%.1fs", d.Seconds())
 	}
 	if d < time.Hour {
-		return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
+		return core.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
 	}
-	return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
+	return core.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
 }

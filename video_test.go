@@ -2,16 +2,15 @@
 package session
 
 import (
-	"os/exec"
-	"strings"
 	"testing"
 	"time"
 
+	core "dappco.re/go/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGenerateTape_BasicSession_Good(t *testing.T) {
+func TestVideo_GenerateTapeBasicSession_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "tape-test-12345678",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -45,7 +44,7 @@ func TestGenerateTape_BasicSession_Good(t *testing.T) {
 	assert.Contains(t, tape, "# Read: /tmp/file.go")
 }
 
-func TestGenerateTape_SkipsNonToolEvents_Good(t *testing.T) {
+func TestVideo_GenerateTapeSkipsNonToolEvents_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "skip-test",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -65,7 +64,7 @@ func TestGenerateTape_SkipsNonToolEvents_Good(t *testing.T) {
 	assert.Contains(t, tape, "echo hi")
 }
 
-func TestGenerateTape_FailedCommand_Good(t *testing.T) {
+func TestVideo_GenerateTapeFailedCommand_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "fail-test",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -84,7 +83,7 @@ func TestGenerateTape_FailedCommand_Good(t *testing.T) {
 	assert.Contains(t, tape, `"# ✗ FAILED"`)
 }
 
-func TestGenerateTape_LongOutput_Good(t *testing.T) {
+func TestVideo_GenerateTapeLongOutput_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "long-test",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -93,7 +92,7 @@ func TestGenerateTape_LongOutput_Good(t *testing.T) {
 				Type:    "tool_use",
 				Tool:    "Bash",
 				Input:   "cat huge.log",
-				Output:  strings.Repeat("x", 300),
+				Output:  repeatString("x", 300),
 				Success: true,
 			},
 		},
@@ -104,7 +103,7 @@ func TestGenerateTape_LongOutput_Good(t *testing.T) {
 	assert.Contains(t, tape, "...")
 }
 
-func TestGenerateTape_TaskEvent_Good(t *testing.T) {
+func TestVideo_GenerateTapeTaskEvent_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "task-test",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -121,7 +120,7 @@ func TestGenerateTape_TaskEvent_Good(t *testing.T) {
 	assert.Contains(t, tape, "# Agent: [research] Analyse code structure")
 }
 
-func TestGenerateTape_EditWriteEvents_Good(t *testing.T) {
+func TestVideo_GenerateTapeEditWriteEvents_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "edit-test",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -136,7 +135,7 @@ func TestGenerateTape_EditWriteEvents_Good(t *testing.T) {
 	assert.Contains(t, tape, "# Write: /tmp/new.go (50 bytes)")
 }
 
-func TestGenerateTape_EmptySession_Good(t *testing.T) {
+func TestVideo_GenerateTapeEmptySession_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "empty-test",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -149,18 +148,18 @@ func TestGenerateTape_EmptySession_Good(t *testing.T) {
 	assert.Contains(t, tape, "Output /tmp/out.mp4")
 	assert.Contains(t, tape, "Sleep 3s")
 	// No tool events
-	lines := strings.Split(tape, "\n")
+	lines := core.Split(tape, "\n")
 	var toolLines int
 	for _, line := range lines {
-		if strings.Contains(line, "$ ") || strings.Contains(line, "# Read:") ||
-			strings.Contains(line, "# Edit:") || strings.Contains(line, "# Write:") {
+		if core.Contains(line, "$ ") || core.Contains(line, "# Read:") ||
+			core.Contains(line, "# Edit:") || core.Contains(line, "# Write:") {
 			toolLines++
 		}
 	}
 	assert.Equal(t, 0, toolLines)
 }
 
-func TestGenerateTape_BashEmptyCommand_Bad(t *testing.T) {
+func TestVideo_GenerateTapeBashEmptyCommand_Bad(t *testing.T) {
 	sess := &Session{
 		ID:        "empty-cmd",
 		StartTime: time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC),
@@ -174,25 +173,25 @@ func TestGenerateTape_BashEmptyCommand_Bad(t *testing.T) {
 	assert.NotContains(t, tape, `"$ "`)
 }
 
-func TestExtractCommand_Good(t *testing.T) {
+func TestVideo_ExtractCommandStripsDescriptionSuffix_Good(t *testing.T) {
 	assert.Equal(t, "ls -la", extractCommand("ls -la # list files"))
 	assert.Equal(t, "go test ./...", extractCommand("go test ./..."))
 	assert.Equal(t, "echo hello", extractCommand("echo hello"))
 }
 
-func TestExtractCommand_NoDescription_Good(t *testing.T) {
+func TestVideo_ExtractCommandNoDescription_Good(t *testing.T) {
 	assert.Equal(t, "plain command", extractCommand("plain command"))
 }
 
-func TestExtractCommand_DescriptionAtStart_Good(t *testing.T) {
+func TestVideo_ExtractCommandDescriptionAtStart_Good(t *testing.T) {
 	// " # " at position 0 means idx <= 0, so it returns the whole input
 	result := extractCommand(" # description only")
 	assert.Equal(t, " # description only", result)
 }
 
-func TestRenderMP4_NoVHS_Ugly(t *testing.T) {
+func TestVideo_RenderMP4NoVHS_Ugly(t *testing.T) {
 	// Skip if vhs is actually installed (this tests the error path)
-	if _, err := exec.LookPath("vhs"); err == nil {
+	if lookupExecutable("vhs") != "" {
 		t.Skip("vhs is installed; skipping missing-vhs test")
 	}
 

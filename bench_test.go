@@ -2,11 +2,11 @@
 package session
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+	"io/fs"
+	"path"
 	"testing"
+
+	core "dappco.re/go/core"
 )
 
 // BenchmarkParseTranscript benchmarks parsing a ~1MB+ JSONL file.
@@ -92,44 +92,44 @@ func BenchmarkSearch(b *testing.B) {
 func generateBenchJSONL(b testing.TB, dir string, numTools int) string {
 	b.Helper()
 
-	var sb strings.Builder
+	sb := core.NewBuilder()
 	baseTS := "2026-02-20T10:00:00Z"
 
 	// Opening user message
-	sb.WriteString(fmt.Sprintf(`{"type":"user","timestamp":"%s","sessionId":"bench","message":{"role":"user","content":[{"type":"text","text":"Start benchmark session"}]}}`, baseTS))
+	sb.WriteString(core.Sprintf(`{"type":"user","timestamp":"%s","sessionId":"bench","message":{"role":"user","content":[{"type":"text","text":"Start benchmark session"}]}}`, baseTS))
 	sb.WriteByte('\n')
 
 	for i := range numTools {
-		toolID := fmt.Sprintf("tool-%d", i)
+		toolID := core.Sprintf("tool-%d", i)
 		offset := i * 2
 
 		// Alternate between different tool types for realistic distribution
 		var toolUse, toolResult string
 		switch i % 5 {
 		case 0: // Bash
-			toolUse = fmt.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"%s","input":{"command":"echo iteration %d","description":"echo test"}}]}}`,
+			toolUse = core.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"%s","input":{"command":"echo iteration %d","description":"echo test"}}]}}`,
 				offset/60, offset%60, toolID, i)
-			toolResult = fmt.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"iteration %d output line one\niteration %d output line two","is_error":false}]}}`,
+			toolResult = core.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"iteration %d output line one\niteration %d output line two","is_error":false}]}}`,
 				(offset+1)/60, (offset+1)%60, toolID, i, i)
 		case 1: // Read
-			toolUse = fmt.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","id":"%s","input":{"file_path":"/tmp/bench/file-%d.go"}}]}}`,
+			toolUse = core.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","id":"%s","input":{"file_path":"/tmp/bench/file-%d.go"}}]}}`,
 				offset/60, offset%60, toolID, i)
-			toolResult = fmt.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"package main\n\nfunc main() {\n\tfmt.Println(%d)\n}","is_error":false}]}}`,
+			toolResult = core.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"package main\n\nfunc main() {\n\tfmt.Println(%d)\n}","is_error":false}]}}`,
 				(offset+1)/60, (offset+1)%60, toolID, i)
 		case 2: // Edit
-			toolUse = fmt.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","id":"%s","input":{"file_path":"/tmp/bench/file-%d.go","old_string":"old","new_string":"new"}}]}}`,
+			toolUse = core.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","id":"%s","input":{"file_path":"/tmp/bench/file-%d.go","old_string":"old","new_string":"new"}}]}}`,
 				offset/60, offset%60, toolID, i)
-			toolResult = fmt.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"ok","is_error":false}]}}`,
+			toolResult = core.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"ok","is_error":false}]}}`,
 				(offset+1)/60, (offset+1)%60, toolID)
 		case 3: // Grep
-			toolUse = fmt.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Grep","id":"%s","input":{"pattern":"TODO","path":"/tmp/bench"}}]}}`,
+			toolUse = core.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Grep","id":"%s","input":{"pattern":"TODO","path":"/tmp/bench"}}]}}`,
 				offset/60, offset%60, toolID)
-			toolResult = fmt.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"/tmp/bench/file.go:10: // TODO fix this","is_error":false}]}}`,
+			toolResult = core.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"/tmp/bench/file.go:10: // TODO fix this","is_error":false}]}}`,
 				(offset+1)/60, (offset+1)%60, toolID)
 		case 4: // Glob
-			toolUse = fmt.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Glob","id":"%s","input":{"pattern":"**/*.go"}}]}}`,
+			toolUse = core.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"assistant","content":[{"type":"tool_use","name":"Glob","id":"%s","input":{"pattern":"**/*.go"}}]}}`,
 				offset/60, offset%60, toolID)
-			toolResult = fmt.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"/tmp/a.go\n/tmp/b.go\n/tmp/c.go","is_error":false}]}}`,
+			toolResult = core.Sprintf(`{"type":"user","timestamp":"2026-02-20T10:%02d:%02dZ","sessionId":"bench","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"%s","content":"/tmp/a.go\n/tmp/b.go\n/tmp/c.go","is_error":false}]}}`,
 				(offset+1)/60, (offset+1)%60, toolID)
 		}
 
@@ -140,16 +140,24 @@ func generateBenchJSONL(b testing.TB, dir string, numTools int) string {
 	}
 
 	// Closing assistant message
-	sb.WriteString(fmt.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T12:00:00Z","sessionId":"bench","message":{"role":"assistant","content":[{"type":"text","text":"Benchmark session complete."}]}}%s`, "\n"))
+	sb.WriteString(core.Sprintf(`{"type":"assistant","timestamp":"2026-02-20T12:00:00Z","sessionId":"bench","message":{"role":"assistant","content":[{"type":"text","text":"Benchmark session complete."}]}}%s`, "\n"))
 
-	name := fmt.Sprintf("bench-%d.jsonl", numTools)
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(sb.String()), 0644); err != nil {
-		b.Fatal(err)
+	name := core.Sprintf("bench-%d.jsonl", numTools)
+	filePath := path.Join(dir, name)
+	writeResult := hostFS.Write(filePath, sb.String())
+	if !writeResult.OK {
+		b.Fatal(resultError(writeResult))
 	}
 
-	info, _ := os.Stat(path)
+	statResult := hostFS.Stat(filePath)
+	if !statResult.OK {
+		b.Fatal(resultError(statResult))
+	}
+	info, ok := statResult.Value.(fs.FileInfo)
+	if !ok {
+		b.Fatal("expected fs.FileInfo from Stat")
+	}
 	b.Logf("Generated %s: %d bytes, %d tool pairs", name, info.Size(), numTools)
 
-	return path
+	return filePath
 }
