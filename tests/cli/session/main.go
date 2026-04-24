@@ -1,0 +1,82 @@
+// SPDX-Licence-Identifier: EUPL-1.2
+package main
+
+import (
+	"os"
+	"strings"
+	"time"
+
+	session "dappco.re/go/session"
+)
+
+const transcript = `{"type":"user","timestamp":"2026-02-20T10:00:00Z","sessionId":"ax10-session","message":{"role":"user","content":[{"type":"text","text":"Run the AX-10 smoke test"}]}}
+{"type":"assistant","timestamp":"2026-02-20T10:00:01Z","sessionId":"ax10-session","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"tool-bash-1","input":{"command":"echo ax10","description":"smoke test"}}]}}
+{"type":"user","timestamp":"2026-02-20T10:00:02Z","sessionId":"ax10-session","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool-bash-1","content":"ax10\n","is_error":false}]}}
+{"type":"assistant","timestamp":"2026-02-20T10:00:03Z","sessionId":"ax10-session","message":{"role":"assistant","content":[{"type":"text","text":"AX-10 complete"}]}}
+`
+
+func main() {
+	dir, err := os.MkdirTemp("", "go-session-ax10-")
+	requireNoError(err, "create temporary directory")
+	defer os.RemoveAll(dir)
+
+	transcriptPath := dir + "/ax10-session.jsonl"
+	requireNoError(os.WriteFile(transcriptPath, []byte(transcript), 0o600), "write transcript")
+
+	sess, stats, err := session.ParseTranscript(transcriptPath)
+	requireNoError(err, "parse transcript")
+	require(sess.ID == "ax10-session", "session ID should come from the file name")
+	require(sess.Path == transcriptPath, "session path should match the parsed file")
+	require(len(sess.Events) == 3, "expected user, tool, and assistant events")
+	require(stats.TotalLines == 4, "expected all transcript lines to be scanned")
+	require(stats.SkippedLines == 0, "expected no skipped transcript lines")
+	require(stats.OrphanedToolCalls == 0, "expected no orphaned tool calls")
+
+	tool := sess.Events[1]
+	require(tool.Type == "tool_use", "expected second event to be the tool call")
+	require(tool.Tool == "Bash", "expected Bash tool call")
+	require(tool.Input == "echo ax10 # smoke test", "expected Bash input to include command and description")
+	require(tool.Output == "ax10\n", "expected Bash output to be preserved")
+	require(tool.Duration == time.Second, "expected one second tool duration")
+	require(tool.Success, "expected successful tool call")
+
+	analytics := session.Analyse(sess)
+	require(analytics.EventCount == 3, "expected analytics event count")
+	require(analytics.ToolCounts["Bash"] == 1, "expected analytics Bash count")
+	require(analytics.SuccessRate == 1, "expected analytics success rate")
+	require(strings.Contains(session.FormatAnalytics(analytics), "Bash"), "expected formatted analytics to include Bash")
+
+	results, err := session.Search(dir, "ax10")
+	requireNoError(err, "search sessions")
+	require(len(results) == 1, "expected one search result")
+	require(results[0].SessionID == "ax10-session", "expected search result session ID")
+
+	sessions, err := session.ListSessions(dir)
+	requireNoError(err, "list sessions")
+	require(len(sessions) == 1, "expected one listed session")
+	require(sessions[0].ID == "ax10-session", "expected listed session ID")
+
+	fetched, _, err := session.FetchSession(dir, "ax10-session")
+	requireNoError(err, "fetch session")
+	require(fetched.ID == sess.ID, "expected fetched session to match parsed session")
+
+	htmlPath := dir + "/timeline.html"
+	requireNoError(session.RenderHTML(sess, htmlPath), "render HTML")
+	htmlBytes, err := os.ReadFile(htmlPath)
+	requireNoError(err, "read rendered HTML")
+	html := string(htmlBytes)
+	require(strings.Contains(html, "Session ax10"), "expected rendered HTML session title")
+	require(strings.Contains(html, "echo ax10"), "expected rendered HTML tool input")
+}
+
+func require(ok bool, msg string) {
+	if !ok {
+		panic(msg)
+	}
+}
+
+func requireNoError(err error, msg string) {
+	if err != nil {
+		panic(msg + ": " + err.Error())
+	}
+}

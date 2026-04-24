@@ -1,0 +1,14 @@
+version: "3"
+
+env:
+  GOWORK: off
+  GOCACHE: /tmp/go-session-go-build-cache
+
+tasks:
+  default:
+    deps: [test]
+
+  test:
+    dir: ../../..
+    cmds:
+      - go run ./tests/cli/session
