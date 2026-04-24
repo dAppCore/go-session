@@ -1,4 +1,4 @@
-module dappco.re/go/core/session
+module dappco.re/go/session
 
 go 1.26.0
 
