@@ -33,7 +33,7 @@ func TestConventions_BannedImports_Good(t *testing.T) {
 		for _, spec := range file.ast.Imports {
 			importPath := trimQuotes(spec.Path.Value)
 			if core.HasPrefix(importPath, "forge.lthn.ai/") {
-				t.Errorf("%s imports %q; use dappco.re/go/core/... paths instead", file.path, importPath)
+				t.Errorf("%s imports %q; use dappco.re/go/... paths instead", file.path, importPath)
 				continue
 			}
 			if reason, ok := banned[importPath]; ok {
