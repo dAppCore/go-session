@@ -2,7 +2,7 @@
 package session
 
 import (
-	"bytes"
+	"bytes" // Note: intrinsic — byte-slice helpers implement local string primitives without strings import; no core equivalent
 
 	core "dappco.re/go/core"
 )
