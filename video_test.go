@@ -6,8 +6,6 @@ import (
 	"time"
 
 	core "dappco.re/go/core"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestVideo_GenerateTapeBasicSession_Good(t *testing.T) {
@@ -34,14 +32,14 @@ func TestVideo_GenerateTapeBasicSession_Good(t *testing.T) {
 
 	tape := generateTape(sess, "/tmp/output.mp4")
 
-	assert.Contains(t, tape, "Output /tmp/output.mp4")
-	assert.Contains(t, tape, "Set FontSize 16")
-	assert.Contains(t, tape, "tape-tes") // shortID
-	assert.Contains(t, tape, "2026-02-20 10:00")
-	assert.Contains(t, tape, `"$ go test ./..."`)
-	assert.Contains(t, tape, "PASS")
-	assert.Contains(t, tape, `"# ✓ OK"`)
-	assert.Contains(t, tape, "# Read: /tmp/file.go")
+	assertContains(t, tape, "Output /tmp/output.mp4")
+	assertContains(t, tape, "Set FontSize 16")
+	assertContains(t, tape, "tape-tes") // shortID
+	assertContains(t, tape, "2026-02-20 10:00")
+	assertContains(t, tape, `"$ go test ./..."`)
+	assertContains(t, tape, "PASS")
+	assertContains(t, tape, `"# ✓ OK"`)
+	assertContains(t, tape, "# Read: /tmp/file.go")
 }
 
 func TestVideo_GenerateTapeSkipsNonToolEvents_Good(t *testing.T) {
@@ -58,10 +56,10 @@ func TestVideo_GenerateTapeSkipsNonToolEvents_Good(t *testing.T) {
 	tape := generateTape(sess, "/tmp/out.mp4")
 
 	// User and assistant events should NOT appear in the tape
-	assert.NotContains(t, tape, "Hello")
-	assert.NotContains(t, tape, "Hi there")
+	assertNotContains(t, tape, "Hello")
+	assertNotContains(t, tape, "Hi there")
 	// Bash command should appear
-	assert.Contains(t, tape, "echo hi")
+	assertContains(t, tape, "echo hi")
 }
 
 func TestVideo_GenerateTapeFailedCommand_Good(t *testing.T) {
@@ -80,7 +78,7 @@ func TestVideo_GenerateTapeFailedCommand_Good(t *testing.T) {
 	}
 
 	tape := generateTape(sess, "/tmp/out.mp4")
-	assert.Contains(t, tape, `"# ✗ FAILED"`)
+	assertContains(t, tape, `"# ✗ FAILED"`)
 }
 
 func TestVideo_GenerateTapeLongOutput_Good(t *testing.T) {
@@ -100,7 +98,7 @@ func TestVideo_GenerateTapeLongOutput_Good(t *testing.T) {
 
 	tape := generateTape(sess, "/tmp/out.mp4")
 	// Output should be truncated to 200 chars + "..."
-	assert.Contains(t, tape, "...")
+	assertContains(t, tape, "...")
 }
 
 func TestVideo_GenerateTapeTaskEvent_Good(t *testing.T) {
@@ -117,7 +115,7 @@ func TestVideo_GenerateTapeTaskEvent_Good(t *testing.T) {
 	}
 
 	tape := generateTape(sess, "/tmp/out.mp4")
-	assert.Contains(t, tape, "# Agent: [research] Analyse code structure")
+	assertContains(t, tape, "# Agent: [research] Analyse code structure")
 }
 
 func TestVideo_GenerateTapeEditWriteEvents_Good(t *testing.T) {
@@ -131,8 +129,8 @@ func TestVideo_GenerateTapeEditWriteEvents_Good(t *testing.T) {
 	}
 
 	tape := generateTape(sess, "/tmp/out.mp4")
-	assert.Contains(t, tape, "# Edit: /tmp/app.go (edit)")
-	assert.Contains(t, tape, "# Write: /tmp/new.go (50 bytes)")
+	assertContains(t, tape, "# Edit: /tmp/app.go (edit)")
+	assertContains(t, tape, "# Write: /tmp/new.go (50 bytes)")
 }
 
 func TestVideo_GenerateTapeEmptySession_Good(t *testing.T) {
@@ -145,8 +143,8 @@ func TestVideo_GenerateTapeEmptySession_Good(t *testing.T) {
 	tape := generateTape(sess, "/tmp/out.mp4")
 
 	// Should still have the header and trailer
-	assert.Contains(t, tape, "Output /tmp/out.mp4")
-	assert.Contains(t, tape, "Sleep 3s")
+	assertContains(t, tape, "Output /tmp/out.mp4")
+	assertContains(t, tape, "Sleep 3s")
 	// No tool events
 	lines := core.Split(tape, "\n")
 	var toolLines int
@@ -156,7 +154,7 @@ func TestVideo_GenerateTapeEmptySession_Good(t *testing.T) {
 			toolLines++
 		}
 	}
-	assert.Equal(t, 0, toolLines)
+	assertEqual(t, 0, toolLines)
 }
 
 func TestVideo_GenerateTapeBashEmptyCommand_Bad(t *testing.T) {
@@ -170,23 +168,23 @@ func TestVideo_GenerateTapeBashEmptyCommand_Bad(t *testing.T) {
 
 	tape := generateTape(sess, "/tmp/out.mp4")
 	// Empty command should be skipped (extractCommand returns "")
-	assert.NotContains(t, tape, `"$ "`)
+	assertNotContains(t, tape, `"$ "`)
 }
 
 func TestVideo_ExtractCommandStripsDescriptionSuffix_Good(t *testing.T) {
-	assert.Equal(t, "ls -la", extractCommand("ls -la # list files"))
-	assert.Equal(t, "go test ./...", extractCommand("go test ./..."))
-	assert.Equal(t, "echo hello", extractCommand("echo hello"))
+	assertEqual(t, "ls -la", extractCommand("ls -la # list files"))
+	assertEqual(t, "go test ./...", extractCommand("go test ./..."))
+	assertEqual(t, "echo hello", extractCommand("echo hello"))
 }
 
 func TestVideo_ExtractCommandNoDescription_Good(t *testing.T) {
-	assert.Equal(t, "plain command", extractCommand("plain command"))
+	assertEqual(t, "plain command", extractCommand("plain command"))
 }
 
 func TestVideo_ExtractCommandDescriptionAtStart_Good(t *testing.T) {
 	// " # " at position 0 means idx <= 0, so it returns the whole input
 	result := extractCommand(" # description only")
-	assert.Equal(t, " # description only", result)
+	assertEqual(t, " # description only", result)
 }
 
 func TestVideo_RenderMP4NoVHS_Ugly(t *testing.T) {
@@ -201,6 +199,6 @@ func TestVideo_RenderMP4NoVHS_Ugly(t *testing.T) {
 	}
 
 	err := RenderMP4(sess, "/tmp/test.mp4")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "vhs not installed")
+	requireError(t, err)
+	assertContains(t, err.Error(), "vhs not installed")
 }
