@@ -2,14 +2,15 @@
 package session
 
 import (
-	"bufio"  // Note: intrinsic — streaming JSONL scan with an explicit bounded buffer; no core equivalent
-	"io"     // Note: intrinsic — Reader and ReadCloser contracts for transcript streams and hostFS handles; no core equivalent
-	"io/fs"  // Note: intrinsic — fs.FileInfo metadata returned from hostFS.Stat; no core equivalent
-	"iter"   // Note: intrinsic — public lazy sequence API for sessions and events; no core equivalent
-	"maps"   // Note: intrinsic — maps.Keys exposes JSON fallback key sets for deterministic output; no core equivalent
-	"path"   // Note: intrinsic — slash-separated transcript path joining and base-name extraction; no core equivalent
-	"slices" // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
-	"time"   // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
+	"bufio"   // Note: intrinsic — streaming JSONL scan with an explicit bounded buffer; no core equivalent
+	"io"      // Note: intrinsic — Reader and ReadCloser contracts for transcript streams and hostFS handles; no core equivalent
+	"io/fs"   // Note: intrinsic — fs.FileInfo metadata returned from hostFS.Stat; no core equivalent
+	"iter"    // Note: intrinsic — public lazy sequence API for sessions and events; no core equivalent
+	"maps"    // Note: intrinsic — maps.Keys exposes JSON fallback key sets for deterministic output; no core equivalent
+	"path"    // Note: intrinsic — slash-separated transcript path joining and base-name extraction; no core equivalent
+	"slices"  // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
+	"syscall" // Note: intrinsic — Stat_t.Mode lstat bits used to reject symlinked transcript files; no core equivalent
+	"time"    // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
 
 	core "dappco.re/go/core"
 )
@@ -17,6 +18,9 @@ import (
 // maxScannerBuffer is the maximum line length the scanner will accept.
 // Set to 8 MiB to handle very large tool outputs without truncation.
 const maxScannerBuffer = 8 * 1024 * 1024
+
+// maxPendingToolCalls bounds unmatched tool_use entries retained while parsing.
+const maxPendingToolCalls = 4096
 
 // Event represents a single action in a session timeline.
 //
@@ -153,6 +157,10 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 
 		var sessions []Session
 		for _, filePath := range matches {
+			if isSymlink(filePath) {
+				continue
+			}
+
 			base := path.Base(filePath)
 			id := core.TrimSuffix(base, ".jsonl")
 
@@ -279,6 +287,9 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 	}
 
 	filePath := path.Join(projectsDir, id+".jsonl")
+	if !isSafeProjectFile(filePath) {
+		return nil, nil, core.E("FetchSession", "invalid session path", nil)
+	}
 	return ParseTranscript(filePath)
 }
 
@@ -344,7 +355,7 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	pendingTools := make(map[string]toolUse)
 
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, maxScannerBuffer), maxScannerBuffer)
+	scanner.Buffer(make([]byte, 64*1024), maxScannerBuffer)
 
 	var lineNum int
 	var lastRaw string
@@ -413,11 +424,19 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 					}
 
 				case "tool_use":
+					if block.ID == "" {
+						continue
+					}
+					if _, exists := pendingTools[block.ID]; !exists && len(pendingTools) >= maxPendingToolCalls {
+						stats.Warnings = append(stats.Warnings,
+							core.Sprintf("line %d: skipped tool_use %q (pending tool limit reached)", lineNum, block.ID))
+						continue
+					}
 					inputStr := extractToolInput(block.Name, block.Input)
 					pendingTools[block.ID] = toolUse{
 						timestamp: ts,
 						tool:      block.Name,
-						input:     inputStr,
+						input:     truncate(inputStr, 500),
 					}
 				}
 			}
@@ -584,4 +603,16 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max] + "..."
+}
+
+func isSymlink(filePath string) bool {
+	var st syscall.Stat_t
+	if err := syscall.Lstat(filePath, &st); err != nil {
+		return false
+	}
+	return st.Mode&syscall.S_IFMT == syscall.S_IFLNK
+}
+
+func isSafeProjectFile(filePath string) bool {
+	return !isSymlink(filePath)
 }

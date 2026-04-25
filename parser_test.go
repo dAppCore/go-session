@@ -1094,6 +1094,80 @@ func TestParser_ParseTranscriptReaderOrphanedTools_Good(t *testing.T) {
 	assertEqual(t, 1, stats.OrphanedToolCalls)
 }
 
+func TestParser_ParseTranscriptToolUseInputTruncated_Bad(t *testing.T) {
+	// Pending tool inputs should not retain an entire scanner-sized line.
+	hugeCommand := repeatString("x", 1024*1024)
+	data := core.Join("\n", []string{
+		toolUseEntry(ts(0), "Bash", "tool-big-input", map[string]any{
+			"command": hugeCommand,
+		}),
+		toolResultEntry(ts(1), "tool-big-input", "ok", false),
+	}...) + "\n"
+
+	sess, _, err := ParseTranscriptReader(core.NewReader(data), "big-tool-input")
+	require.NoError(t, err)
+	require.Len(t, sess.Events, 1)
+	assert.Len(t, sess.Events[0].Input, 503)
+}
+
+func TestParser_ParseTranscriptPendingToolLimit_Bad(t *testing.T) {
+	// Unmatched tool_use entries are attacker-controlled and must be bounded.
+	lines := make([]string, 0, maxPendingToolCalls+1)
+	for i := range maxPendingToolCalls + 1 {
+		toolID := core.Sprintf("orphan-%d", i)
+		lines = append(lines, toolUseEntry(ts(i), "Bash", toolID, map[string]any{
+			"command": "true",
+		}))
+	}
+	data := core.Join("\n", lines...) + "\n"
+
+	_, stats, err := ParseTranscriptReader(core.NewReader(data), "many-orphans")
+	require.NoError(t, err)
+	require.NotNil(t, stats)
+	assert.Equal(t, maxPendingToolCalls, stats.OrphanedToolCalls)
+	assert.Contains(t, core.Join("\n", stats.Warnings...), "pending tool limit reached")
+}
+
+func TestParser_ParseTranscriptDeeplyNestedJSON_Bad(t *testing.T) {
+	// Deep malformed JSON should be reported as a skipped line, not panic.
+	deep := repeatString("[", 1200) + repeatString("]", 1200)
+	data := deep + "\n" + userTextEntry(ts(0), "after deep json") + "\n"
+
+	require.NotPanics(t, func() {
+		sess, stats, err := ParseTranscriptReader(core.NewReader(data), "deep-json")
+		require.NoError(t, err)
+		require.Len(t, sess.Events, 1)
+		assert.Equal(t, "after deep json", sess.Events[0].Input)
+		assert.Equal(t, 1, stats.SkippedLines)
+	})
+}
+
+func TestParser_ParseTranscriptUnexpectedToolTypes_Bad(t *testing.T) {
+	// Unexpected input/content JSON types should not panic type extraction.
+	data := core.Join("\n", []string{
+		`{"type":"assistant","timestamp":"` + ts(0) + `","sessionId":"bad-types","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"num-input","input":42}]}}`,
+		`{"type":"user","timestamp":"` + ts(1) + `","sessionId":"bad-types","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"num-input","content":42,"is_error":false}]}}`,
+	}...) + "\n"
+
+	sess, _, err := ParseTranscriptReader(core.NewReader(data), "bad-types")
+	require.NoError(t, err)
+	require.Len(t, sess.Events, 1)
+	assert.Equal(t, "", sess.Events[0].Input)
+	assert.Equal(t, "42", sess.Events[0].Output)
+}
+
+func TestParser_ParseTranscriptUTF16SurrogateHalf_Bad(t *testing.T) {
+	// Lone UTF-16 surrogate escapes are accepted by encoding/json as replacement runes.
+	data := `{"type":"user","timestamp":"` + ts(0) + `","sessionId":"utf","message":{"role":"user","content":[{"type":"text","text":"bad \ud800 text"}]}}` + "\n"
+
+	require.NotPanics(t, func() {
+		sess, _, err := ParseTranscriptReader(core.NewReader(data), "utf-surrogate")
+		require.NoError(t, err)
+		require.Len(t, sess.Events, 1)
+		assert.Contains(t, sess.Events[0].Input, "bad ")
+	})
+}
+
 // --- Custom MCP tool tests ---
 
 func TestParser_ParseTranscriptCustomMCPTool_Good(t *testing.T) {
@@ -1429,6 +1503,30 @@ func TestParser_FetchSessionForwardSlash_Ugly(t *testing.T) {
 	assertContains(t, err.Error(), "invalid session id")
 }
 
+func TestParser_FetchSessionURLEncodedTraversal_Ugly(t *testing.T) {
+	dir := t.TempDir()
+
+	_, _, err := FetchSession(dir, "%2e%2e%2fetc%2fpasswd")
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "/etc/passwd")
+}
+
+func TestParser_FetchSessionSymlinkTraversal_Ugly(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	outsideFile := writeJSONL(t, outside, "secret.jsonl",
+		userTextEntry(ts(0), "outside"),
+	)
+	linkPath := path.Join(dir, "linked.jsonl")
+	if err := syscall.Symlink(outsideFile, linkPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, _, err := FetchSession(dir, "linked")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session path")
+}
+
 func TestParser_FetchSessionNotFound_Bad(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1457,6 +1555,21 @@ func TestParser_ListSessionsTruncatedFile_Good(t *testing.T) {
 	assertFalse(t, sessions[0].EndTime.IsZero())
 	// End time should reflect the last valid timestamp.
 	assertTrue(t, sessions[0].EndTime.After(sessions[0].StartTime))
+}
+
+func TestParser_ListSessionsSymlinkTraversal_Ugly(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	outsideFile := writeJSONL(t, outside, "secret.jsonl",
+		userTextEntry(ts(0), "outside"),
+	)
+	if err := syscall.Symlink(outsideFile, path.Join(dir, "linked.jsonl")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	sessions, err := ListSessions(dir)
+	require.NoError(t, err)
+	assert.Empty(t, sessions)
 }
 
 // --- PruneSessions tests ---
