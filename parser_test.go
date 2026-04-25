@@ -874,7 +874,7 @@ func TestParser_ParseStatsMalformedLines_Good(t *testing.T) {
 	}
 }
 
-func TestParser_ParseStatsOrphanedToolCalls_Good(t *testing.T) {
+func TestParser_ParseStatsOrphanedToolCalls_Ugly(t *testing.T) {
 	dir := t.TempDir()
 	// Two tool_use entries with no matching tool_result
 	path := writeJSONL(t, dir, "orphaned.jsonl",
@@ -1105,9 +1105,9 @@ func TestParser_ParseTranscriptToolUseInputTruncated_Bad(t *testing.T) {
 	}...) + "\n"
 
 	sess, _, err := ParseTranscriptReader(core.NewReader(data), "big-tool-input")
-	require.NoError(t, err)
-	require.Len(t, sess.Events, 1)
-	assert.Len(t, sess.Events[0].Input, 503)
+	requireNoError(t, err)
+	requireLen(t, sess.Events, 1)
+	assertLen(t, sess.Events[0].Input, 503)
 }
 
 func TestParser_ParseTranscriptPendingToolLimit_Bad(t *testing.T) {
@@ -1122,10 +1122,10 @@ func TestParser_ParseTranscriptPendingToolLimit_Bad(t *testing.T) {
 	data := core.Join("\n", lines...) + "\n"
 
 	_, stats, err := ParseTranscriptReader(core.NewReader(data), "many-orphans")
-	require.NoError(t, err)
-	require.NotNil(t, stats)
-	assert.Equal(t, maxPendingToolCalls, stats.OrphanedToolCalls)
-	assert.Contains(t, core.Join("\n", stats.Warnings...), "pending tool limit reached")
+	requireNoError(t, err)
+	requireNotNil(t, stats)
+	assertEqual(t, maxPendingToolCalls, stats.OrphanedToolCalls)
+	assertContains(t, core.Join("\n", stats.Warnings...), "pending tool limit reached")
 }
 
 func TestParser_ParseTranscriptDeeplyNestedJSON_Bad(t *testing.T) {
@@ -1133,13 +1133,17 @@ func TestParser_ParseTranscriptDeeplyNestedJSON_Bad(t *testing.T) {
 	deep := repeatString("[", 1200) + repeatString("]", 1200)
 	data := deep + "\n" + userTextEntry(ts(0), "after deep json") + "\n"
 
-	require.NotPanics(t, func() {
-		sess, stats, err := ParseTranscriptReader(core.NewReader(data), "deep-json")
-		require.NoError(t, err)
-		require.Len(t, sess.Events, 1)
-		assert.Equal(t, "after deep json", sess.Events[0].Input)
-		assert.Equal(t, 1, stats.SkippedLines)
-	})
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("unexpected panic: %v", r)
+		}
+	}()
+
+	sess, stats, err := ParseTranscriptReader(core.NewReader(data), "deep-json")
+	requireNoError(t, err)
+	requireLen(t, sess.Events, 1)
+	assertEqual(t, "after deep json", sess.Events[0].Input)
+	assertEqual(t, 1, stats.SkippedLines)
 }
 
 func TestParser_ParseTranscriptUnexpectedToolTypes_Bad(t *testing.T) {
@@ -1150,22 +1154,26 @@ func TestParser_ParseTranscriptUnexpectedToolTypes_Bad(t *testing.T) {
 	}...) + "\n"
 
 	sess, _, err := ParseTranscriptReader(core.NewReader(data), "bad-types")
-	require.NoError(t, err)
-	require.Len(t, sess.Events, 1)
-	assert.Equal(t, "", sess.Events[0].Input)
-	assert.Equal(t, "42", sess.Events[0].Output)
+	requireNoError(t, err)
+	requireLen(t, sess.Events, 1)
+	assertEqual(t, "", sess.Events[0].Input)
+	assertEqual(t, "42", sess.Events[0].Output)
 }
 
 func TestParser_ParseTranscriptUTF16SurrogateHalf_Bad(t *testing.T) {
 	// Lone UTF-16 surrogate escapes are accepted by encoding/json as replacement runes.
 	data := `{"type":"user","timestamp":"` + ts(0) + `","sessionId":"utf","message":{"role":"user","content":[{"type":"text","text":"bad \ud800 text"}]}}` + "\n"
 
-	require.NotPanics(t, func() {
-		sess, _, err := ParseTranscriptReader(core.NewReader(data), "utf-surrogate")
-		require.NoError(t, err)
-		require.Len(t, sess.Events, 1)
-		assert.Contains(t, sess.Events[0].Input, "bad ")
-	})
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("unexpected panic: %v", r)
+		}
+	}()
+
+	sess, _, err := ParseTranscriptReader(core.NewReader(data), "utf-surrogate")
+	requireNoError(t, err)
+	requireLen(t, sess.Events, 1)
+	assertContains(t, sess.Events[0].Input, "bad ")
 }
 
 // --- Custom MCP tool tests ---
@@ -1507,8 +1515,8 @@ func TestParser_FetchSessionURLEncodedTraversal_Ugly(t *testing.T) {
 	dir := t.TempDir()
 
 	_, _, err := FetchSession(dir, "%2e%2e%2fetc%2fpasswd")
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "/etc/passwd")
+	requireError(t, err)
+	assertNotContains(t, err.Error(), "/etc/passwd")
 }
 
 func TestParser_FetchSessionSymlinkTraversal_Ugly(t *testing.T) {
@@ -1523,8 +1531,8 @@ func TestParser_FetchSessionSymlinkTraversal_Ugly(t *testing.T) {
 	}
 
 	_, _, err := FetchSession(dir, "linked")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid session path")
+	requireError(t, err)
+	assertContains(t, err.Error(), "invalid session path")
 }
 
 func TestParser_FetchSessionNotFound_Bad(t *testing.T) {
@@ -1568,8 +1576,8 @@ func TestParser_ListSessionsSymlinkTraversal_Ugly(t *testing.T) {
 	}
 
 	sessions, err := ListSessions(dir)
-	require.NoError(t, err)
-	assert.Empty(t, sessions)
+	requireNoError(t, err)
+	assertEmpty(t, sessions)
 }
 
 // --- PruneSessions tests ---

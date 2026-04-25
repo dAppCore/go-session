@@ -33,3 +33,13 @@ Finding: Yes for symlinks before fix. `FetchSession` rejected literal `..`, `/`,
 Severity: Medium before fix. Exploitation requires ability to place a symlink in projectsDir, but then reads can escape the intended session directory.
 
 Coverage: Added URL-encoded traversal, FetchSession symlink traversal, and ListSessions symlink traversal tests (`parser_test.go:1508`, `parser_test.go:1516`, `parser_test.go:1562`).
+
+## 4. Mantis #669 ParseStats RFC audit
+
+Status: NOTABUG
+
+Question: Does `ParseStats` match RFC §3 field-for-field, especially `Warnings` and `OrphanedToolCalls`?
+
+Finding: Yes. RFC §3 specifies `TotalLines int`, `SkippedLines int`, `OrphanedToolCalls int`, and `Warnings []string`; `parser.go` defines those exact fields and types. `Warnings` is a string slice, not a plain string, and `OrphanedToolCalls` is an integer counter, not a boolean or string.
+
+Coverage: `TestParser_ParseStatsOrphanedToolCalls_Ugly` covers unmatched `tool_use` records without matching `tool_result` records and asserts `ParseStats.OrphanedToolCalls > 0`.
