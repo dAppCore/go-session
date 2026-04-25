@@ -3,11 +3,33 @@ package session
 
 import (
 	"bytes" // Note: intrinsic — byte-slice helpers implement local string primitives without strings import; no core equivalent
+	"context"
 
 	core "dappco.re/go/core"
 )
 
+var hostCore = core.New()
 var hostFS = (&core.Fs{}).NewUnrestricted()
+
+func sessionCore(c *core.Core) *core.Core {
+	if c == nil {
+		c = hostCore
+	}
+	if c == nil {
+		c = core.New()
+		hostCore = c
+	}
+	return c
+}
+
+func hostContext(c *core.Core) context.Context {
+	c = sessionCore(c)
+	return c.Context()
+}
+
+func hostProcess(c *core.Core) *core.Process {
+	return sessionCore(c).Process()
+}
 
 type rawJSON []byte
 

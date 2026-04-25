@@ -2,9 +2,8 @@
 package session
 
 import (
-	"io/fs"   // Note: intrinsic — fs.FileInfo metadata for executable checks from hostFS.Stat; no core equivalent
-	"path"    // Note: intrinsic — PATH candidate and temporary tape path construction; no core equivalent
-	"syscall" // Note: intrinsic — ForkExec/Wait4 invokes VHS without importing banned os/exec; no core equivalent
+	"io/fs" // Note: intrinsic — fs.FileInfo metadata for executable checks from hostFS.Stat; no core equivalent
+	"path"  // Note: intrinsic — PATH candidate and temporary tape path construction; no core equivalent
 
 	core "dappco.re/go/core"
 )
@@ -165,31 +164,10 @@ func isExecutablePath(filePath string) bool {
 }
 
 func runCommand(command string, args ...string) error {
-	argv := append([]string{command}, args...)
-	procAttr := &syscall.ProcAttr{
-		Env:   syscall.Environ(),
-		Files: []uintptr{0, 1, 2},
-	}
-
-	pid, err := syscall.ForkExec(command, argv, procAttr)
-	if err != nil {
-		return core.E("runCommand", "fork exec command", err)
-	}
-
-	var status syscall.WaitStatus
-	if _, err := syscall.Wait4(pid, &status, 0, nil); err != nil {
-		return core.E("runCommand", "wait for command", err)
-	}
-
-	if status.Exited() && status.ExitStatus() == 0 {
+	c := sessionCore(nil)
+	runResult := hostProcess(c).Run(hostContext(c), command, args...)
+	if runResult.OK {
 		return nil
 	}
-	if status.Signaled() {
-		return core.E("runCommand", core.Sprintf("command terminated by signal %d", status.Signal()), nil)
-	}
-	if status.Exited() {
-		return core.E("runCommand", core.Sprintf("command exited with status %d", status.ExitStatus()), nil)
-	}
-
-	return core.E("runCommand", "command failed", nil)
+	return core.E("runCommand", "run command", resultError(runResult))
 }
