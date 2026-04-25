@@ -2,10 +2,10 @@
 package session
 
 import (
-	"iter"
-	"path"
-	"slices"
-	"time"
+	"iter"   // Note: intrinsic — public lazy sequence API for search results; no core equivalent
+	"path"   // Note: intrinsic — slash-separated transcript glob path construction; no core equivalent
+	"slices" // Note: intrinsic — slices.Collect materialises search iterator results; no core equivalent
+	"time"   // Note: intrinsic — search result timestamps mirror parsed transcript event times; no core equivalent
 
 	core "dappco.re/go/core"
 )

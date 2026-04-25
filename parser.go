@@ -2,14 +2,14 @@
 package session
 
 import (
-	"bufio"
-	"io"
-	"io/fs"
-	"iter"
-	"maps"
-	"path"
-	"slices"
-	"time"
+	"bufio"  // Note: intrinsic — streaming JSONL scan with an explicit bounded buffer; no core equivalent
+	"io"     // Note: intrinsic — Reader and ReadCloser contracts for transcript streams and hostFS handles; no core equivalent
+	"io/fs"  // Note: intrinsic — fs.FileInfo metadata returned from hostFS.Stat; no core equivalent
+	"iter"   // Note: intrinsic — public lazy sequence API for sessions and events; no core equivalent
+	"maps"   // Note: intrinsic — maps.Keys exposes JSON fallback key sets for deterministic output; no core equivalent
+	"path"   // Note: intrinsic — slash-separated transcript path joining and base-name extraction; no core equivalent
+	"slices" // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
+	"time"   // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
 
 	core "dappco.re/go/core"
 )

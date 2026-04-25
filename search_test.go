@@ -4,17 +4,14 @@ package session
 import (
 	"path"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSearch_SearchEmptyDir_Good(t *testing.T) {
 	dir := t.TempDir()
 
 	results, err := Search(dir, "anything")
-	require.NoError(t, err)
-	assert.Empty(t, results)
+	requireNoError(t, err)
+	assertEmpty(t, results)
 }
 
 func TestSearch_SearchNoMatches_Good(t *testing.T) {
@@ -27,8 +24,8 @@ func TestSearch_SearchNoMatches_Good(t *testing.T) {
 	)
 
 	results, err := Search(dir, "nonexistent-query")
-	require.NoError(t, err)
-	assert.Empty(t, results)
+	requireNoError(t, err)
+	assertEmpty(t, results)
 }
 
 func TestSearch_SearchSingleMatch_Good(t *testing.T) {
@@ -41,12 +38,12 @@ func TestSearch_SearchSingleMatch_Good(t *testing.T) {
 	)
 
 	results, err := Search(dir, "go test")
-	require.NoError(t, err)
-	require.Len(t, results, 1)
+	requireNoError(t, err)
+	requireLen(t, results, 1)
 
-	assert.Equal(t, "session", results[0].SessionID)
-	assert.Equal(t, "Bash", results[0].Tool)
-	assert.Contains(t, results[0].Match, "go test")
+	assertEqual(t, "session", results[0].SessionID)
+	assertEqual(t, "Bash", results[0].Tool)
+	assertContains(t, results[0].Match, "go test")
 }
 
 func TestSearch_SearchSeqSingleMatch_Good(t *testing.T) {
@@ -63,9 +60,9 @@ func TestSearch_SearchSeqSingleMatch_Good(t *testing.T) {
 		results = append(results, r)
 	}
 
-	require.Len(t, results, 1)
-	assert.Equal(t, "session", results[0].SessionID)
-	assert.Equal(t, "Bash", results[0].Tool)
+	requireLen(t, results, 1)
+	assertEqual(t, "session", results[0].SessionID)
+	assertEqual(t, "Bash", results[0].Tool)
 }
 
 func TestSearch_SearchMultipleMatches_Good(t *testing.T) {
@@ -88,8 +85,8 @@ func TestSearch_SearchMultipleMatches_Good(t *testing.T) {
 	)
 
 	results, err := Search(dir, "go test")
-	require.NoError(t, err)
-	assert.Len(t, results, 3, "should find matches across both sessions")
+	requireNoError(t, err)
+	assertLen(t, results, 3, "should find matches across both sessions")
 }
 
 func TestSearch_SearchCaseInsensitive_Good(t *testing.T) {
@@ -102,8 +99,8 @@ func TestSearch_SearchCaseInsensitive_Good(t *testing.T) {
 	)
 
 	results, err := Search(dir, "go test")
-	require.NoError(t, err)
-	assert.Len(t, results, 1, "search should be case-insensitive")
+	requireNoError(t, err)
+	assertLen(t, results, 1, "search should be case-insensitive")
 }
 
 func TestSearch_SearchMatchesInOutput_Good(t *testing.T) {
@@ -116,10 +113,10 @@ func TestSearch_SearchMatchesInOutput_Good(t *testing.T) {
 	)
 
 	results, err := Search(dir, "connection refused")
-	require.NoError(t, err)
-	require.Len(t, results, 1, "should match against output text")
+	requireNoError(t, err)
+	requireLen(t, results, 1, "should match against output text")
 	// Match field should contain the input (command) since it's non-empty
-	assert.Contains(t, results[0].Match, "cat log.txt")
+	assertContains(t, results[0].Match, "cat log.txt")
 }
 
 func TestSearch_SearchSkipsNonToolEvents_Good(t *testing.T) {
@@ -131,18 +128,18 @@ func TestSearch_SearchSkipsNonToolEvents_Good(t *testing.T) {
 
 	// "search" appears in user and assistant text, but Search only checks tool_use events
 	results, err := Search(dir, "search")
-	require.NoError(t, err)
-	assert.Empty(t, results, "should only match tool_use events, not user/assistant text")
+	requireNoError(t, err)
+	assertEmpty(t, results, "should only match tool_use events, not user/assistant text")
 }
 
 func TestSearch_SearchNonJSONLIgnored_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeResult := hostFS.Write(path.Join(dir, "readme.md"), "go test")
-	require.True(t, writeResult.OK)
+	requireTrue(t, writeResult.OK)
 
 	results, err := Search(dir, "go test")
-	require.NoError(t, err)
-	assert.Empty(t, results, "non-JSONL files should be ignored")
+	requireNoError(t, err)
+	assertEmpty(t, results, "non-JSONL files should be ignored")
 }
 
 func TestSearch_SearchMalformedSessionSkipped_Bad(t *testing.T) {
@@ -160,6 +157,6 @@ func TestSearch_SearchMalformedSessionSkipped_Bad(t *testing.T) {
 	)
 
 	results, err := Search(dir, "go test")
-	require.NoError(t, err)
-	assert.Len(t, results, 1, "should still find matches in valid sessions")
+	requireNoError(t, err)
+	assertLen(t, results, 1, "should still find matches in valid sessions")
 }

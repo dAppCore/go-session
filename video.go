@@ -2,9 +2,9 @@
 package session
 
 import (
-	"io/fs"
-	"path"
-	"syscall"
+	"io/fs"   // Note: intrinsic — fs.FileInfo metadata for executable checks from hostFS.Stat; no core equivalent
+	"path"    // Note: intrinsic — PATH candidate and temporary tape path construction; no core equivalent
+	"syscall" // Note: intrinsic — ForkExec/Wait4 invokes VHS without importing banned os/exec; no core equivalent
 
 	core "dappco.re/go/core"
 )

@@ -9,8 +9,6 @@ import (
 	"time"
 
 	core "dappco.re/go/core"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // --- helpers to build synthetic JSONL ---
@@ -106,7 +104,7 @@ func writeJSONL(t *testing.T, dir string, name string, lines ...string) string {
 	t.Helper()
 	filePath := path.Join(dir, name)
 	writeResult := hostFS.Write(filePath, core.Concat(core.Join("\n", lines...), "\n"))
-	require.True(t, writeResult.OK)
+	requireTrue(t, writeResult.OK)
 	return filePath
 }
 
@@ -127,21 +125,21 @@ func TestParser_ParseTranscriptMinimalValid_Good(t *testing.T) {
 	)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.NotNil(t, sess)
+	requireNoError(t, err)
+	requireNotNil(t, sess)
 
-	assert.Equal(t, "minimal", sess.ID)
-	assert.Equal(t, path, sess.Path)
-	assert.False(t, sess.StartTime.IsZero(), "StartTime should be set")
-	assert.False(t, sess.EndTime.IsZero(), "EndTime should be set")
-	assert.True(t, sess.EndTime.After(sess.StartTime) || sess.EndTime.Equal(sess.StartTime))
+	assertEqual(t, "minimal", sess.ID)
+	assertEqual(t, path, sess.Path)
+	assertFalse(t, sess.StartTime.IsZero(), "StartTime should be set")
+	assertFalse(t, sess.EndTime.IsZero(), "EndTime should be set")
+	assertTrue(t, sess.EndTime.After(sess.StartTime) || sess.EndTime.Equal(sess.StartTime))
 
 	// Should have a user event and an assistant event
-	require.Len(t, sess.Events, 2)
-	assert.Equal(t, "user", sess.Events[0].Type)
-	assert.Equal(t, "Hello", sess.Events[0].Input)
-	assert.Equal(t, "assistant", sess.Events[1].Type)
-	assert.Equal(t, "Hi there!", sess.Events[1].Input)
+	requireLen(t, sess.Events, 2)
+	assertEqual(t, "user", sess.Events[0].Type)
+	assertEqual(t, "Hello", sess.Events[0].Input)
+	assertEqual(t, "assistant", sess.Events[1].Type)
+	assertEqual(t, "Hi there!", sess.Events[1].Input)
 }
 
 func TestParser_ParseTranscriptToolCalls_Good(t *testing.T) {
@@ -197,7 +195,7 @@ func TestParser_ParseTranscriptToolCalls_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "tools.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	// Count tool_use events
 	var toolEvents []Event
@@ -207,32 +205,32 @@ func TestParser_ParseTranscriptToolCalls_Good(t *testing.T) {
 		}
 	}
 
-	require.Len(t, toolEvents, 7, "should have 7 tool_use events")
+	requireLen(t, toolEvents, 7, "should have 7 tool_use events")
 
 	// Verify each tool was parsed correctly
-	assert.Equal(t, "Bash", toolEvents[0].Tool)
-	assert.Contains(t, toolEvents[0].Input, "ls -la")
-	assert.Contains(t, toolEvents[0].Input, "# list files")
-	assert.True(t, toolEvents[0].Success)
-	assert.Equal(t, time.Second, toolEvents[0].Duration)
+	assertEqual(t, "Bash", toolEvents[0].Tool)
+	assertContains(t, toolEvents[0].Input, "ls -la")
+	assertContains(t, toolEvents[0].Input, "# list files")
+	assertTrue(t, toolEvents[0].Success)
+	assertEqual(t, time.Second, toolEvents[0].Duration)
 
-	assert.Equal(t, "Read", toolEvents[1].Tool)
-	assert.Equal(t, "/tmp/test.go", toolEvents[1].Input)
+	assertEqual(t, "Read", toolEvents[1].Tool)
+	assertEqual(t, "/tmp/test.go", toolEvents[1].Input)
 
-	assert.Equal(t, "Edit", toolEvents[2].Tool)
-	assert.Equal(t, "/tmp/test.go (edit)", toolEvents[2].Input)
+	assertEqual(t, "Edit", toolEvents[2].Tool)
+	assertEqual(t, "/tmp/test.go (edit)", toolEvents[2].Input)
 
-	assert.Equal(t, "Write", toolEvents[3].Tool)
-	assert.Equal(t, "/tmp/new.go (12 bytes)", toolEvents[3].Input)
+	assertEqual(t, "Write", toolEvents[3].Tool)
+	assertEqual(t, "/tmp/new.go (12 bytes)", toolEvents[3].Input)
 
-	assert.Equal(t, "Grep", toolEvents[4].Tool)
-	assert.Equal(t, "/TODO/ in /tmp", toolEvents[4].Input)
+	assertEqual(t, "Grep", toolEvents[4].Tool)
+	assertEqual(t, "/TODO/ in /tmp", toolEvents[4].Input)
 
-	assert.Equal(t, "Glob", toolEvents[5].Tool)
-	assert.Equal(t, "**/*.go", toolEvents[5].Input)
+	assertEqual(t, "Glob", toolEvents[5].Tool)
+	assertEqual(t, "**/*.go", toolEvents[5].Input)
 
-	assert.Equal(t, "Task", toolEvents[6].Tool)
-	assert.Equal(t, "[research] Code analysis", toolEvents[6].Input)
+	assertEqual(t, "Task", toolEvents[6].Tool)
+	assertEqual(t, "[research] Code analysis", toolEvents[6].Input)
 }
 
 func TestParser_ParseTranscriptToolError_Good(t *testing.T) {
@@ -245,7 +243,7 @@ func TestParser_ParseTranscriptToolError_Good(t *testing.T) {
 	)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	var toolEvents []Event
 	for _, e := range sess.Events {
@@ -254,9 +252,9 @@ func TestParser_ParseTranscriptToolError_Good(t *testing.T) {
 		}
 	}
 
-	require.Len(t, toolEvents, 1)
-	assert.False(t, toolEvents[0].Success)
-	assert.Contains(t, toolEvents[0].ErrorMsg, "No such file or directory")
+	requireLen(t, toolEvents, 1)
+	assertFalse(t, toolEvents[0].Success)
+	assertContains(t, toolEvents[0].ErrorMsg, "No such file or directory")
 }
 
 func TestParser_ParseTranscriptEmptyFile_Bad(t *testing.T) {
@@ -264,13 +262,13 @@ func TestParser_ParseTranscriptEmptyFile_Bad(t *testing.T) {
 	path := writeJSONL(t, dir, "empty.jsonl")
 	// Write a truly empty file
 	writeResult := hostFS.Write(path, "")
-	require.True(t, writeResult.OK)
+	requireTrue(t, writeResult.OK)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.NotNil(t, sess)
-	assert.Empty(t, sess.Events)
-	assert.True(t, sess.StartTime.IsZero())
+	requireNoError(t, err)
+	requireNotNil(t, sess)
+	assertEmpty(t, sess.Events)
+	assertTrue(t, sess.StartTime.IsZero())
 }
 
 func TestParser_ParseTranscriptMalformedJSON_Bad(t *testing.T) {
@@ -284,13 +282,13 @@ func TestParser_ParseTranscriptMalformedJSON_Bad(t *testing.T) {
 	)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err, "malformed lines should be skipped, not cause an error")
-	require.NotNil(t, sess)
+	requireNoError(t, err, "malformed lines should be skipped, not cause an error")
+	requireNotNil(t, sess)
 
 	// Only the valid lines should produce events
-	assert.Len(t, sess.Events, 2)
-	assert.Equal(t, "user", sess.Events[0].Type)
-	assert.Equal(t, "assistant", sess.Events[1].Type)
+	assertLen(t, sess.Events, 2)
+	assertEqual(t, "user", sess.Events[0].Type)
+	assertEqual(t, "assistant", sess.Events[1].Type)
 }
 
 func TestParser_ParseTranscriptTruncatedJSONL_Bad(t *testing.T) {
@@ -303,12 +301,12 @@ func TestParser_ParseTranscriptTruncatedJSONL_Bad(t *testing.T) {
 	path := writeJSONL(t, dir, "truncated.jsonl", validLine, truncated)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err, "truncated last line should be skipped gracefully")
-	require.NotNil(t, sess)
+	requireNoError(t, err, "truncated last line should be skipped gracefully")
+	requireNotNil(t, sess)
 
 	// Only the first valid line should produce an event
-	assert.Len(t, sess.Events, 1)
-	assert.Equal(t, "user", sess.Events[0].Type)
+	assertLen(t, sess.Events, 1)
+	assertEqual(t, "user", sess.Events[0].Type)
 }
 
 func TestParser_ParseTranscriptLargeSession_Good(t *testing.T) {
@@ -333,7 +331,7 @@ func TestParser_ParseTranscriptLargeSession_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "large.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	var toolCount int
 	for _, e := range sess.Events {
@@ -341,7 +339,7 @@ func TestParser_ParseTranscriptLargeSession_Good(t *testing.T) {
 			toolCount++
 		}
 	}
-	assert.Equal(t, 1100, toolCount, "all 1100 tool events should be parsed")
+	assertEqual(t, 1100, toolCount, "all 1100 tool events should be parsed")
 }
 
 func TestParser_ParseTranscriptNestedToolResults_Good(t *testing.T) {
@@ -379,7 +377,7 @@ func TestParser_ParseTranscriptNestedToolResults_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "nested.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	var toolEvents []Event
 	for _, e := range sess.Events {
@@ -388,9 +386,9 @@ func TestParser_ParseTranscriptNestedToolResults_Good(t *testing.T) {
 		}
 	}
 
-	require.Len(t, toolEvents, 1)
-	assert.Contains(t, toolEvents[0].Output, "First block")
-	assert.Contains(t, toolEvents[0].Output, "Second block")
+	requireLen(t, toolEvents, 1)
+	assertContains(t, toolEvents[0].Output, "First block")
+	assertContains(t, toolEvents[0].Output, "Second block")
 }
 
 func TestParser_ParseTranscriptNestedMapResult_Good(t *testing.T) {
@@ -424,7 +422,7 @@ func TestParser_ParseTranscriptNestedMapResult_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "map-result.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	var toolEvents []Event
 	for _, e := range sess.Events {
@@ -433,14 +431,14 @@ func TestParser_ParseTranscriptNestedMapResult_Good(t *testing.T) {
 		}
 	}
 
-	require.Len(t, toolEvents, 1)
-	assert.Contains(t, toolEvents[0].Output, "file contents here")
+	requireLen(t, toolEvents, 1)
+	assertContains(t, toolEvents[0].Output, "file contents here")
 }
 
 func TestParser_ParseTranscriptFileNotFound_Ugly(t *testing.T) {
 	_, _, err := ParseTranscript("/nonexistent/path/session.jsonl")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "open transcript")
+	requireError(t, err)
+	assertContains(t, err.Error(), "open transcript")
 }
 
 func TestParser_ParseTranscriptSessionIDFromFilename_Good(t *testing.T) {
@@ -450,8 +448,8 @@ func TestParser_ParseTranscriptSessionIDFromFilename_Good(t *testing.T) {
 	)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
-	assert.Equal(t, "abc123def456", sess.ID)
+	requireNoError(t, err)
+	assertEqual(t, "abc123def456", sess.ID)
 }
 
 func TestParser_ParseTranscriptTimestampsTracked_Good(t *testing.T) {
@@ -463,13 +461,13 @@ func TestParser_ParseTranscriptTimestampsTracked_Good(t *testing.T) {
 	)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	expectedStart, _ := time.Parse(time.RFC3339Nano, ts(0))
 	expectedEnd, _ := time.Parse(time.RFC3339Nano, ts(10))
 
-	assert.Equal(t, expectedStart, sess.StartTime)
-	assert.Equal(t, expectedEnd, sess.EndTime)
+	assertEqual(t, expectedStart, sess.StartTime)
+	assertEqual(t, expectedEnd, sess.EndTime)
 }
 
 func TestParser_ParseTranscriptTextTruncation_Good(t *testing.T) {
@@ -480,12 +478,12 @@ func TestParser_ParseTranscriptTextTruncation_Good(t *testing.T) {
 	)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
-	require.Len(t, sess.Events, 1)
+	requireLen(t, sess.Events, 1)
 	// Input should be truncated to 500 + "..."
-	assert.True(t, len(sess.Events[0].Input) <= 504, "input should be truncated")
-	assert.True(t, core.HasSuffix(sess.Events[0].Input, "..."), "truncated text should end with ...")
+	assertTrue(t, len(sess.Events[0].Input) <= 504, "input should be truncated")
+	assertTrue(t, core.HasSuffix(sess.Events[0].Input, "..."), "truncated text should end with ...")
 }
 
 func TestParser_SessionEventsSeq_Good(t *testing.T) {
@@ -502,7 +500,7 @@ func TestParser_SessionEventsSeq_Good(t *testing.T) {
 		events = append(events, e)
 	}
 
-	assert.Equal(t, sess.Events, events)
+	assertEqual(t, sess.Events, events)
 }
 
 func TestParser_ParseTranscriptMixedContentBlocks_Good(t *testing.T) {
@@ -534,13 +532,13 @@ func TestParser_ParseTranscriptMixedContentBlocks_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "mixed.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	// Should have an assistant text event + a tool_use event
-	require.Len(t, sess.Events, 2)
-	assert.Equal(t, "assistant", sess.Events[0].Type)
-	assert.Equal(t, "tool_use", sess.Events[1].Type)
-	assert.Equal(t, "Read", sess.Events[1].Tool)
+	requireLen(t, sess.Events, 2)
+	assertEqual(t, "assistant", sess.Events[0].Type)
+	assertEqual(t, "tool_use", sess.Events[1].Type)
+	assertEqual(t, "Read", sess.Events[1].Tool)
 }
 
 func TestParser_ParseTranscriptUnmatchedToolResult_Bad(t *testing.T) {
@@ -552,11 +550,11 @@ func TestParser_ParseTranscriptUnmatchedToolResult_Bad(t *testing.T) {
 	)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	// Only the user text event should appear; the orphan tool result is ignored
-	require.Len(t, sess.Events, 1)
-	assert.Equal(t, "user", sess.Events[0].Type)
+	requireLen(t, sess.Events, 1)
+	assertEqual(t, "user", sess.Events[0].Type)
 }
 
 func TestParser_ParseTranscriptEmptyTimestamp_Bad(t *testing.T) {
@@ -576,10 +574,10 @@ func TestParser_ParseTranscriptEmptyTimestamp_Bad(t *testing.T) {
 	path := writeJSONL(t, dir, "no-ts.jsonl", line)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	// The event should still be parsed, but StartTime remains zero
-	assert.True(t, sess.StartTime.IsZero())
+	assertTrue(t, sess.StartTime.IsZero())
 }
 
 // --- ListSessions tests ---
@@ -588,8 +586,8 @@ func TestParser_ListSessionsEmptyDir_Good(t *testing.T) {
 	dir := t.TempDir()
 
 	sessions, err := ListSessions(dir)
-	require.NoError(t, err)
-	assert.Empty(t, sessions)
+	requireNoError(t, err)
+	assertEmpty(t, sessions)
 }
 
 func TestParser_ListSessionsSingleSession_Good(t *testing.T) {
@@ -600,12 +598,12 @@ func TestParser_ListSessionsSingleSession_Good(t *testing.T) {
 	)
 
 	sessions, err := ListSessions(dir)
-	require.NoError(t, err)
-	require.Len(t, sessions, 1)
+	requireNoError(t, err)
+	requireLen(t, sessions, 1)
 
-	assert.Equal(t, "session-abc", sessions[0].ID)
-	assert.False(t, sessions[0].StartTime.IsZero())
-	assert.False(t, sessions[0].EndTime.IsZero())
+	assertEqual(t, "session-abc", sessions[0].ID)
+	assertFalse(t, sessions[0].StartTime.IsZero())
+	assertFalse(t, sessions[0].EndTime.IsZero())
 }
 
 func TestParser_ListSessionsMultipleSorted_Good(t *testing.T) {
@@ -624,13 +622,13 @@ func TestParser_ListSessionsMultipleSorted_Good(t *testing.T) {
 	)
 
 	sessions, err := ListSessions(dir)
-	require.NoError(t, err)
-	require.Len(t, sessions, 3)
+	requireNoError(t, err)
+	requireLen(t, sessions, 3)
 
 	// Should be sorted newest first
-	assert.Equal(t, "new", sessions[0].ID)
-	assert.Equal(t, "mid", sessions[1].ID)
-	assert.Equal(t, "old", sessions[2].ID)
+	assertEqual(t, "new", sessions[0].ID)
+	assertEqual(t, "mid", sessions[1].ID)
+	assertEqual(t, "old", sessions[2].ID)
 }
 
 func TestParser_ListSessionsNonJSONLIgnored_Good(t *testing.T) {
@@ -640,14 +638,14 @@ func TestParser_ListSessionsNonJSONLIgnored_Good(t *testing.T) {
 		userTextEntry(ts(0), "real"),
 	)
 	// Write non-JSONL files
-	require.True(t, hostFS.Write(path.Join(dir, "readme.md"), "# Hello").OK)
-	require.True(t, hostFS.Write(path.Join(dir, "notes.txt"), "notes").OK)
-	require.True(t, hostFS.Write(path.Join(dir, "data.json"), "{}").OK)
+	requireTrue(t, hostFS.Write(path.Join(dir, "readme.md"), "# Hello").OK)
+	requireTrue(t, hostFS.Write(path.Join(dir, "notes.txt"), "notes").OK)
+	requireTrue(t, hostFS.Write(path.Join(dir, "data.json"), "{}").OK)
 
 	sessions, err := ListSessions(dir)
-	require.NoError(t, err)
-	require.Len(t, sessions, 1)
-	assert.Equal(t, "real-session", sessions[0].ID)
+	requireNoError(t, err)
+	requireLen(t, sessions, 1)
+	assertEqual(t, "real-session", sessions[0].ID)
 }
 
 func TestParser_ListSessionsSeqMultipleSorted_Good(t *testing.T) {
@@ -663,11 +661,11 @@ func TestParser_ListSessionsSeqMultipleSorted_Good(t *testing.T) {
 		sessions = append(sessions, s)
 	}
 
-	require.Len(t, sessions, 3)
+	requireLen(t, sessions, 3)
 	// Should be sorted newest first
-	assert.Equal(t, "new", sessions[0].ID)
-	assert.Equal(t, "mid", sessions[1].ID)
-	assert.Equal(t, "old", sessions[2].ID)
+	assertEqual(t, "new", sessions[0].ID)
+	assertEqual(t, "mid", sessions[1].ID)
+	assertEqual(t, "old", sessions[2].ID)
 }
 
 func TestParser_ListSessionsMalformedJSONLStillListed_Bad(t *testing.T) {
@@ -680,11 +678,11 @@ func TestParser_ListSessionsMalformedJSONLStillListed_Bad(t *testing.T) {
 	)
 
 	sessions, err := ListSessions(dir)
-	require.NoError(t, err)
-	require.Len(t, sessions, 1)
-	assert.Equal(t, "broken", sessions[0].ID)
+	requireNoError(t, err)
+	requireLen(t, sessions, 1)
+	assertEqual(t, "broken", sessions[0].ID)
 	// StartTime should fall back to file modtime since no valid timestamps
-	assert.False(t, sessions[0].StartTime.IsZero(), "should fall back to file modtime")
+	assertFalse(t, sessions[0].StartTime.IsZero(), "should fall back to file modtime")
 }
 
 // --- extractToolInput tests ---
@@ -692,87 +690,87 @@ func TestParser_ListSessionsMalformedJSONLStillListed_Bad(t *testing.T) {
 func TestParser_ExtractToolInputBash_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"command":"go test ./...","description":"run tests","timeout":120}`))
 	result := extractToolInput("Bash", input)
-	assert.Equal(t, "go test ./... # run tests", result)
+	assertEqual(t, "go test ./... # run tests", result)
 }
 
 func TestParser_ExtractToolInputBashNoDescription_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"command":"ls -la"}`))
 	result := extractToolInput("Bash", input)
-	assert.Equal(t, "ls -la", result)
+	assertEqual(t, "ls -la", result)
 }
 
 func TestParser_ExtractToolInputRead_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"file_path":"/Users/test/main.go","offset":10,"limit":50}`))
 	result := extractToolInput("Read", input)
-	assert.Equal(t, "/Users/test/main.go", result)
+	assertEqual(t, "/Users/test/main.go", result)
 }
 
 func TestParser_ExtractToolInputEdit_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"file_path":"/tmp/app.go","old_string":"foo","new_string":"bar"}`))
 	result := extractToolInput("Edit", input)
-	assert.Equal(t, "/tmp/app.go (edit)", result)
+	assertEqual(t, "/tmp/app.go (edit)", result)
 }
 
 func TestParser_ExtractToolInputWrite_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"file_path":"/tmp/out.txt","content":"hello world"}`))
 	result := extractToolInput("Write", input)
-	assert.Equal(t, "/tmp/out.txt (11 bytes)", result)
+	assertEqual(t, "/tmp/out.txt (11 bytes)", result)
 }
 
 func TestParser_ExtractToolInputGrep_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"pattern":"TODO","path":"/src"}`))
 	result := extractToolInput("Grep", input)
-	assert.Equal(t, "/TODO/ in /src", result)
+	assertEqual(t, "/TODO/ in /src", result)
 }
 
 func TestParser_ExtractToolInputGrepNoPath_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"pattern":"FIXME"}`))
 	result := extractToolInput("Grep", input)
-	assert.Equal(t, "/FIXME/ in .", result)
+	assertEqual(t, "/FIXME/ in .", result)
 }
 
 func TestParser_ExtractToolInputGlob_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"pattern":"**/*.go","path":"/src"}`))
 	result := extractToolInput("Glob", input)
-	assert.Equal(t, "**/*.go", result)
+	assertEqual(t, "**/*.go", result)
 }
 
 func TestParser_ExtractToolInputTask_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"prompt":"Analyse the codebase","description":"Code review","subagent_type":"research"}`))
 	result := extractToolInput("Task", input)
-	assert.Equal(t, "[research] Code review", result)
+	assertEqual(t, "[research] Code review", result)
 }
 
 func TestParser_ExtractToolInputTaskNoDescription_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"prompt":"Short prompt","subagent_type":"codegen"}`))
 	result := extractToolInput("Task", input)
-	assert.Equal(t, "[codegen] Short prompt", result)
+	assertEqual(t, "[codegen] Short prompt", result)
 }
 
 func TestParser_ExtractToolInputUnknownTool_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"alpha":"one","beta":"two"}`))
 	result := extractToolInput("CustomTool", input)
 	// Fallback: sorted keys
-	assert.Equal(t, "alpha, beta", result)
+	assertEqual(t, "alpha, beta", result)
 }
 
 func TestParser_ExtractToolInputNilInput_Bad(t *testing.T) {
 	result := extractToolInput("Bash", nil)
-	assert.Equal(t, "", result)
+	assertEqual(t, "", result)
 }
 
 func TestParser_ExtractToolInputInvalidJSON_Bad(t *testing.T) {
 	input := rawJSON([]byte(`{broken`))
 	result := extractToolInput("Bash", input)
 	// All unmarshals fail, including the fallback map unmarshal
-	assert.Equal(t, "", result)
+	assertEqual(t, "", result)
 }
 
 // --- extractResultContent tests ---
 
 func TestParser_ExtractResultContentString_Good(t *testing.T) {
 	result := extractResultContent("simple string")
-	assert.Equal(t, "simple string", result)
+	assertEqual(t, "simple string", result)
 }
 
 func TestParser_ExtractResultContentArray_Good(t *testing.T) {
@@ -781,52 +779,52 @@ func TestParser_ExtractResultContentArray_Good(t *testing.T) {
 		map[string]any{"type": "text", "text": "line two"},
 	}
 	result := extractResultContent(content)
-	assert.Equal(t, "line one\nline two", result)
+	assertEqual(t, "line one\nline two", result)
 }
 
 func TestParser_ExtractResultContentMap_Good(t *testing.T) {
 	content := map[string]any{"text": "from map"}
 	result := extractResultContent(content)
-	assert.Equal(t, "from map", result)
+	assertEqual(t, "from map", result)
 }
 
 func TestParser_ExtractResultContentOther_Bad(t *testing.T) {
 	result := extractResultContent(42)
-	assert.Equal(t, "42", result)
+	assertEqual(t, "42", result)
 }
 
 // --- truncate tests ---
 
 func TestParser_TruncateShort_Good(t *testing.T) {
-	assert.Equal(t, "hello", truncate("hello", 10))
+	assertEqual(t, "hello", truncate("hello", 10))
 }
 
 func TestParser_TruncateExact_Good(t *testing.T) {
-	assert.Equal(t, "hello", truncate("hello", 5))
+	assertEqual(t, "hello", truncate("hello", 5))
 }
 
 func TestParser_TruncateLong_Good(t *testing.T) {
 	result := truncate("hello world", 5)
-	assert.Equal(t, "hello...", result)
+	assertEqual(t, "hello...", result)
 }
 
 func TestParser_TruncateEmpty_Good(t *testing.T) {
-	assert.Equal(t, "", truncate("", 10))
+	assertEqual(t, "", truncate("", 10))
 }
 
 // --- helper function tests ---
 
 func TestParser_ShortIDTruncatesAndPreservesLength_Good(t *testing.T) {
-	assert.Equal(t, "abcdefgh", shortID("abcdefghijklmnop"))
-	assert.Equal(t, "short", shortID("short"))
-	assert.Equal(t, "12345678", shortID("12345678"))
+	assertEqual(t, "abcdefgh", shortID("abcdefghijklmnop"))
+	assertEqual(t, "short", shortID("short"))
+	assertEqual(t, "12345678", shortID("12345678"))
 }
 
 func TestParser_FormatDurationCommonDurations_Good(t *testing.T) {
-	assert.Equal(t, "500ms", formatDuration(500*time.Millisecond))
-	assert.Equal(t, "1.5s", formatDuration(1500*time.Millisecond))
-	assert.Equal(t, "2m30s", formatDuration(2*time.Minute+30*time.Second))
-	assert.Equal(t, "1h5m", formatDuration(1*time.Hour+5*time.Minute))
+	assertEqual(t, "500ms", formatDuration(500*time.Millisecond))
+	assertEqual(t, "1.5s", formatDuration(1500*time.Millisecond))
+	assertEqual(t, "2m30s", formatDuration(2*time.Minute+30*time.Second))
+	assertEqual(t, "1h5m", formatDuration(1*time.Hour+5*time.Minute))
 }
 
 // --- ParseStats tests ---
@@ -843,13 +841,13 @@ func TestParser_ParseStatsCleanJSONL_Good(t *testing.T) {
 	)
 
 	_, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.NotNil(t, stats)
+	requireNoError(t, err)
+	requireNotNil(t, stats)
 
-	assert.Equal(t, 4, stats.TotalLines)
-	assert.Equal(t, 0, stats.SkippedLines)
-	assert.Equal(t, 0, stats.OrphanedToolCalls)
-	assert.Empty(t, stats.Warnings)
+	assertEqual(t, 4, stats.TotalLines)
+	assertEqual(t, 0, stats.SkippedLines)
+	assertEqual(t, 0, stats.OrphanedToolCalls)
+	assertEmpty(t, stats.Warnings)
 }
 
 func TestParser_ParseStatsMalformedLines_Good(t *testing.T) {
@@ -863,16 +861,16 @@ func TestParser_ParseStatsMalformedLines_Good(t *testing.T) {
 	)
 
 	_, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.NotNil(t, stats)
+	requireNoError(t, err)
+	requireNotNil(t, stats)
 
-	assert.Equal(t, 5, stats.TotalLines)
-	assert.Equal(t, 3, stats.SkippedLines)
-	assert.Len(t, stats.Warnings, 3)
+	assertEqual(t, 5, stats.TotalLines)
+	assertEqual(t, 3, stats.SkippedLines)
+	assertLen(t, stats.Warnings, 3)
 
 	// Each warning should contain line number and preview
 	for _, w := range stats.Warnings {
-		assert.Contains(t, w, "skipped (bad JSON)")
+		assertContains(t, w, "skipped (bad JSON)")
 	}
 }
 
@@ -890,10 +888,10 @@ func TestParser_ParseStatsOrphanedToolCalls_Good(t *testing.T) {
 	)
 
 	_, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.NotNil(t, stats)
+	requireNoError(t, err)
+	requireNotNil(t, stats)
 
-	assert.Equal(t, 2, stats.OrphanedToolCalls)
+	assertEqual(t, 2, stats.OrphanedToolCalls)
 
 	// Warnings should mention orphaned tool IDs
 	var orphanWarnings int
@@ -902,7 +900,7 @@ func TestParser_ParseStatsOrphanedToolCalls_Good(t *testing.T) {
 			orphanWarnings++
 		}
 	}
-	assert.Equal(t, 2, orphanWarnings)
+	assertEqual(t, 2, orphanWarnings)
 }
 
 func TestParser_ParseStatsTruncatedFinalLine_Good(t *testing.T) {
@@ -912,13 +910,13 @@ func TestParser_ParseStatsTruncatedFinalLine_Good(t *testing.T) {
 
 	// Write without trailing newline after truncated line
 	path := path.Join(dir, "truncfinal.jsonl")
-	require.True(t, hostFS.Write(path, validLine+"\n"+truncatedLine+"\n").OK)
+	requireTrue(t, hostFS.Write(path, validLine+"\n"+truncatedLine+"\n").OK)
 
 	_, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.NotNil(t, stats)
+	requireNoError(t, err)
+	requireNotNil(t, stats)
 
-	assert.Equal(t, 1, stats.SkippedLines)
+	assertEqual(t, 1, stats.SkippedLines)
 
 	// Should detect truncated final line
 	var foundTruncated bool
@@ -927,7 +925,7 @@ func TestParser_ParseStatsTruncatedFinalLine_Good(t *testing.T) {
 			foundTruncated = true
 		}
 	}
-	assert.True(t, foundTruncated, "should detect truncated final line")
+	assertTrue(t, foundTruncated, "should detect truncated final line")
 }
 
 func TestParser_ParseStatsFileEndingMidJSON_Good(t *testing.T) {
@@ -936,14 +934,14 @@ func TestParser_ParseStatsFileEndingMidJSON_Good(t *testing.T) {
 	midJSON := `{"type":"assistant","timestamp":"2026-02-20T10:00:01Z","sessionId":"test","message":{"role":"assi`
 
 	path := path.Join(dir, "midjson.jsonl")
-	require.True(t, hostFS.Write(path, validLine+"\n"+midJSON+"\n").OK)
+	requireTrue(t, hostFS.Write(path, validLine+"\n"+midJSON+"\n").OK)
 
 	sess, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.NotNil(t, sess)
-	require.NotNil(t, stats)
+	requireNoError(t, err)
+	requireNotNil(t, sess)
+	requireNotNil(t, stats)
 
-	assert.Equal(t, 1, stats.SkippedLines)
+	assertEqual(t, 1, stats.SkippedLines)
 
 	var foundTruncated bool
 	for _, w := range stats.Warnings {
@@ -951,7 +949,7 @@ func TestParser_ParseStatsFileEndingMidJSON_Good(t *testing.T) {
 			foundTruncated = true
 		}
 	}
-	assert.True(t, foundTruncated)
+	assertTrue(t, foundTruncated)
 }
 
 func TestParser_ParseStatsCompleteFileNoTrailingNewline_Good(t *testing.T) {
@@ -960,16 +958,16 @@ func TestParser_ParseStatsCompleteFileNoTrailingNewline_Good(t *testing.T) {
 
 	// Write without trailing newline — should still parse fine
 	path := path.Join(dir, "nonewline.jsonl")
-	require.True(t, hostFS.Write(path, line).OK)
+	requireTrue(t, hostFS.Write(path, line).OK)
 
 	sess, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.NotNil(t, sess)
-	require.NotNil(t, stats)
+	requireNoError(t, err)
+	requireNotNil(t, sess)
+	requireNotNil(t, stats)
 
-	assert.Equal(t, 0, stats.SkippedLines)
-	assert.Equal(t, 0, stats.OrphanedToolCalls)
-	assert.Len(t, sess.Events, 1)
+	assertEqual(t, 0, stats.SkippedLines)
+	assertEqual(t, 0, stats.OrphanedToolCalls)
+	assertLen(t, sess.Events, 1)
 
 	// No truncation warning since the line parsed successfully
 	var foundTruncated bool
@@ -978,7 +976,7 @@ func TestParser_ParseStatsCompleteFileNoTrailingNewline_Good(t *testing.T) {
 			foundTruncated = true
 		}
 	}
-	assert.False(t, foundTruncated)
+	assertFalse(t, foundTruncated)
 }
 
 func TestParser_ParseStatsWarningPreviewTruncated_Good(t *testing.T) {
@@ -991,13 +989,13 @@ func TestParser_ParseStatsWarningPreviewTruncated_Good(t *testing.T) {
 	)
 
 	_, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
-	require.Len(t, stats.Warnings, 1) // 1 skipped line (last line is valid, no truncation)
+	requireLen(t, stats.Warnings, 1) // 1 skipped line (last line is valid, no truncation)
 	// The preview in the warning should be at most ~100 chars of the bad line
-	assert.True(t, len(stats.Warnings[0]) < 200,
+	assertTrue(t, len(stats.Warnings[0]) < 200,
 		"warning preview should be truncated for long lines")
-	assert.Contains(t, stats.Warnings[0], "line 1:")
+	assertContains(t, stats.Warnings[0], "line 1:")
 }
 
 // --- ParseTranscriptReader (streaming) tests ---
@@ -1011,17 +1009,17 @@ func TestParser_ParseTranscriptReaderMinimalValid_Good(t *testing.T) {
 	reader := core.NewReader(data)
 
 	sess, stats, err := ParseTranscriptReader(reader, "stream-session")
-	require.NoError(t, err)
-	require.NotNil(t, sess)
-	require.NotNil(t, stats)
+	requireNoError(t, err)
+	requireNotNil(t, sess)
+	requireNotNil(t, stats)
 
-	assert.Equal(t, "stream-session", sess.ID)
-	assert.Empty(t, sess.Path, "reader-based parse should have empty path")
-	assert.Len(t, sess.Events, 2)
-	assert.Equal(t, "hello", sess.Events[0].Input)
-	assert.Equal(t, "world", sess.Events[1].Input)
-	assert.Equal(t, 2, stats.TotalLines)
-	assert.Equal(t, 0, stats.SkippedLines)
+	assertEqual(t, "stream-session", sess.ID)
+	assertEmpty(t, sess.Path, "reader-based parse should have empty path")
+	assertLen(t, sess.Events, 2)
+	assertEqual(t, "hello", sess.Events[0].Input)
+	assertEqual(t, "world", sess.Events[1].Input)
+	assertEqual(t, 2, stats.TotalLines)
+	assertEqual(t, 0, stats.SkippedLines)
 }
 
 func TestParser_ParseTranscriptReaderBytesBuffer_Good(t *testing.T) {
@@ -1036,20 +1034,20 @@ func TestParser_ParseTranscriptReaderBytesBuffer_Good(t *testing.T) {
 	buf := bytes.NewBufferString(data)
 
 	sess, _, err := ParseTranscriptReader(buf, "buf-session")
-	require.NoError(t, err)
-	require.Len(t, sess.Events, 1)
-	assert.Equal(t, "Bash", sess.Events[0].Tool)
-	assert.True(t, sess.Events[0].Success)
+	requireNoError(t, err)
+	requireLen(t, sess.Events, 1)
+	assertEqual(t, "Bash", sess.Events[0].Tool)
+	assertTrue(t, sess.Events[0].Success)
 }
 
 func TestParser_ParseTranscriptReaderEmptyReader_Good(t *testing.T) {
 	reader := core.NewReader("")
 
 	sess, stats, err := ParseTranscriptReader(reader, "empty")
-	require.NoError(t, err)
-	require.NotNil(t, sess)
-	assert.Empty(t, sess.Events)
-	assert.Equal(t, 0, stats.TotalLines)
+	requireNoError(t, err)
+	requireNotNil(t, sess)
+	assertEmpty(t, sess.Events)
+	assertEqual(t, 0, stats.TotalLines)
 }
 
 func TestParser_ParseTranscriptReaderLargeLines_Good(t *testing.T) {
@@ -1059,10 +1057,10 @@ func TestParser_ParseTranscriptReaderLargeLines_Good(t *testing.T) {
 	reader := core.NewReader(data)
 
 	sess, _, err := ParseTranscriptReader(reader, "big-session")
-	require.NoError(t, err)
-	require.Len(t, sess.Events, 1)
+	requireNoError(t, err)
+	requireLen(t, sess.Events, 1)
 	// Input gets truncated to 500 chars by the truncate function.
-	assert.Len(t, sess.Events[0].Input, 503) // 500 + "..."
+	assertLen(t, sess.Events[0].Input, 503) // 500 + "..."
 }
 
 func TestParser_ParseTranscriptReaderMalformedWithStats_Good(t *testing.T) {
@@ -1075,10 +1073,10 @@ func TestParser_ParseTranscriptReaderMalformedWithStats_Good(t *testing.T) {
 	reader := core.NewReader(data)
 
 	sess, stats, err := ParseTranscriptReader(reader, "mixed")
-	require.NoError(t, err)
-	assert.Len(t, sess.Events, 1)
-	assert.Equal(t, 3, stats.TotalLines)
-	assert.Equal(t, 2, stats.SkippedLines)
+	requireNoError(t, err)
+	assertLen(t, sess.Events, 1)
+	assertEqual(t, 3, stats.TotalLines)
+	assertEqual(t, 2, stats.SkippedLines)
 }
 
 func TestParser_ParseTranscriptReaderOrphanedTools_Good(t *testing.T) {
@@ -1092,8 +1090,8 @@ func TestParser_ParseTranscriptReaderOrphanedTools_Good(t *testing.T) {
 	reader := core.NewReader(data)
 
 	_, stats, err := ParseTranscriptReader(reader, "orphan-reader")
-	require.NoError(t, err)
-	assert.Equal(t, 1, stats.OrphanedToolCalls)
+	requireNoError(t, err)
+	assertEqual(t, 1, stats.OrphanedToolCalls)
 }
 
 // --- Custom MCP tool tests ---
@@ -1112,7 +1110,7 @@ func TestParser_ParseTranscriptCustomMCPTool_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "mcp_tool.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	var toolEvents []Event
 	for _, e := range sess.Events {
@@ -1121,13 +1119,13 @@ func TestParser_ParseTranscriptCustomMCPTool_Good(t *testing.T) {
 		}
 	}
 
-	require.Len(t, toolEvents, 1)
-	assert.Equal(t, "mcp__forge__create_issue", toolEvents[0].Tool)
+	requireLen(t, toolEvents, 1)
+	assertEqual(t, "mcp__forge__create_issue", toolEvents[0].Tool)
 	// Fallback should show sorted keys.
-	assert.Contains(t, toolEvents[0].Input, "body")
-	assert.Contains(t, toolEvents[0].Input, "repo")
-	assert.Contains(t, toolEvents[0].Input, "title")
-	assert.True(t, toolEvents[0].Success)
+	assertContains(t, toolEvents[0].Input, "body")
+	assertContains(t, toolEvents[0].Input, "repo")
+	assertContains(t, toolEvents[0].Input, "title")
+	assertTrue(t, toolEvents[0].Success)
 }
 
 func TestParser_ParseTranscriptCustomMCPToolNestedInput_Good(t *testing.T) {
@@ -1143,7 +1141,7 @@ func TestParser_ParseTranscriptCustomMCPToolNestedInput_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "mcp_nested.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	var toolEvents []Event
 	for _, e := range sess.Events {
@@ -1152,9 +1150,9 @@ func TestParser_ParseTranscriptCustomMCPToolNestedInput_Good(t *testing.T) {
 		}
 	}
 
-	require.Len(t, toolEvents, 1)
-	assert.Contains(t, toolEvents[0].Input, "params")
-	assert.Contains(t, toolEvents[0].Input, "query")
+	requireLen(t, toolEvents, 1)
+	assertContains(t, toolEvents[0].Input, "params")
+	assertContains(t, toolEvents[0].Input, "query")
 }
 
 func TestParser_ParseTranscriptUnknownToolEmptyInput_Good(t *testing.T) {
@@ -1167,7 +1165,7 @@ func TestParser_ParseTranscriptUnknownToolEmptyInput_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "empty_input.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	var toolEvents []Event
 	for _, e := range sess.Events {
@@ -1176,9 +1174,9 @@ func TestParser_ParseTranscriptUnknownToolEmptyInput_Good(t *testing.T) {
 		}
 	}
 
-	require.Len(t, toolEvents, 1)
+	requireLen(t, toolEvents, 1)
 	// Empty object should produce empty string from fallback.
-	assert.Equal(t, "", toolEvents[0].Input)
+	assertEqual(t, "", toolEvents[0].Input)
 }
 
 // --- Edge case error recovery tests ---
@@ -1195,7 +1193,7 @@ func TestParser_ParseTranscriptBinaryGarbage_Ugly(t *testing.T) {
 	path := writeJSONL(t, dir, "binary.jsonl", lines...)
 
 	sess, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	// Only the valid line should produce an event.
 	var userEvents []Event
@@ -1204,9 +1202,9 @@ func TestParser_ParseTranscriptBinaryGarbage_Ugly(t *testing.T) {
 			userEvents = append(userEvents, e)
 		}
 	}
-	require.Len(t, userEvents, 1)
-	assert.Equal(t, "survived", userEvents[0].Input)
-	assert.Equal(t, 2, stats.SkippedLines)
+	requireLen(t, userEvents, 1)
+	assertEqual(t, "survived", userEvents[0].Input)
+	assertEqual(t, 2, stats.SkippedLines)
 }
 
 func TestParser_ParseTranscriptNullBytes_Ugly(t *testing.T) {
@@ -1219,8 +1217,8 @@ func TestParser_ParseTranscriptNullBytes_Ugly(t *testing.T) {
 	path := writeJSONL(t, dir, "null_bytes.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
-	assert.Len(t, sess.Events, 1)
+	requireNoError(t, err)
+	assertLen(t, sess.Events, 1)
 }
 
 func TestParser_ParseTranscriptVeryLongLine_Ugly(t *testing.T) {
@@ -1233,8 +1231,8 @@ func TestParser_ParseTranscriptVeryLongLine_Ugly(t *testing.T) {
 	)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
-	require.Len(t, sess.Events, 1)
+	requireNoError(t, err)
+	requireLen(t, sess.Events, 1)
 }
 
 func TestParser_ParseTranscriptMalformedMessageJSON_Bad(t *testing.T) {
@@ -1247,10 +1245,10 @@ func TestParser_ParseTranscriptMalformedMessageJSON_Bad(t *testing.T) {
 	path := writeJSONL(t, dir, "bad_msg.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 	// First line's message is a string, not object — should be skipped.
-	assert.Len(t, sess.Events, 1)
-	assert.Equal(t, "ok", sess.Events[0].Input)
+	assertLen(t, sess.Events, 1)
+	assertEqual(t, "ok", sess.Events[0].Input)
 }
 
 func TestParser_ParseTranscriptMalformedContentBlock_Bad(t *testing.T) {
@@ -1263,9 +1261,9 @@ func TestParser_ParseTranscriptMalformedContentBlock_Bad(t *testing.T) {
 	path := writeJSONL(t, dir, "bad_block.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
-	assert.Len(t, sess.Events, 1)
-	assert.Equal(t, "still ok", sess.Events[0].Input)
+	requireNoError(t, err)
+	assertLen(t, sess.Events, 1)
+	assertEqual(t, "still ok", sess.Events[0].Input)
 }
 
 func TestParser_ParseTranscriptTruncatedMissingBrace_Good(t *testing.T) {
@@ -1279,11 +1277,11 @@ func TestParser_ParseTranscriptTruncatedMissingBrace_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "trunc_brace.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
+	requireNoError(t, err)
 	// Only the two complete lines should produce events.
-	assert.Len(t, sess.Events, 2)
-	assert.Equal(t, "valid", sess.Events[0].Input)
-	assert.Equal(t, "also valid", sess.Events[1].Input)
+	assertLen(t, sess.Events, 2)
+	assertEqual(t, "valid", sess.Events[0].Input)
+	assertEqual(t, "also valid", sess.Events[1].Input)
 }
 
 func TestParser_ParseTranscriptTruncatedMidKey_Good(t *testing.T) {
@@ -1296,9 +1294,9 @@ func TestParser_ParseTranscriptTruncatedMidKey_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "trunc_midkey.jsonl", lines...)
 
 	sess, _, err := ParseTranscript(path)
-	require.NoError(t, err)
-	assert.Len(t, sess.Events, 1)
-	assert.Equal(t, "first", sess.Events[0].Input)
+	requireNoError(t, err)
+	assertLen(t, sess.Events, 1)
+	assertEqual(t, "first", sess.Events[0].Input)
 }
 
 func TestParser_ParseTranscriptAllBadLines_Good(t *testing.T) {
@@ -1312,10 +1310,10 @@ func TestParser_ParseTranscriptAllBadLines_Good(t *testing.T) {
 	path := writeJSONL(t, dir, "all_bad.jsonl", lines...)
 
 	sess, stats, err := ParseTranscript(path)
-	require.NoError(t, err)
-	assert.Empty(t, sess.Events)
-	assert.True(t, sess.StartTime.IsZero())
-	assert.Equal(t, 3, stats.SkippedLines)
+	requireNoError(t, err)
+	assertEmpty(t, sess.Events)
+	assertTrue(t, sess.StartTime.IsZero())
+	assertEqual(t, 3, stats.SkippedLines)
 }
 
 // --- ListSessions with truncated files ---
@@ -1331,7 +1329,7 @@ func TestParser_PruneSessionsDeletesOldFiles_Good(t *testing.T) {
 	)
 	// Backdate the file's mtime by 2 hours.
 	oldTime := time.Now().Add(-2 * time.Hour)
-	require.NoError(t, setFileTimes(path, oldTime, oldTime))
+	requireNoError(t, setFileTimes(path, oldTime, oldTime))
 
 	// Create a recent session file.
 	writeJSONL(t, dir, "new-session.jsonl",
@@ -1340,14 +1338,14 @@ func TestParser_PruneSessionsDeletesOldFiles_Good(t *testing.T) {
 
 	// Prune sessions older than 1 hour.
 	deleted, err := PruneSessions(dir, 1*time.Hour)
-	require.NoError(t, err)
-	assert.Equal(t, 1, deleted)
+	requireNoError(t, err)
+	assertEqual(t, 1, deleted)
 
 	// Verify only the new file remains.
 	sessions, err := ListSessions(dir)
-	require.NoError(t, err)
-	require.Len(t, sessions, 1)
-	assert.Equal(t, "new-session", sessions[0].ID)
+	requireNoError(t, err)
+	requireLen(t, sessions, 1)
+	assertEqual(t, "new-session", sessions[0].ID)
 }
 
 func TestParser_PruneSessionsNothingToDelete_Good(t *testing.T) {
@@ -1358,16 +1356,16 @@ func TestParser_PruneSessionsNothingToDelete_Good(t *testing.T) {
 	)
 
 	deleted, err := PruneSessions(dir, 24*time.Hour)
-	require.NoError(t, err)
-	assert.Equal(t, 0, deleted)
+	requireNoError(t, err)
+	assertEqual(t, 0, deleted)
 }
 
 func TestParser_PruneSessionsEmptyDir_Good(t *testing.T) {
 	dir := t.TempDir()
 
 	deleted, err := PruneSessions(dir, 1*time.Hour)
-	require.NoError(t, err)
-	assert.Equal(t, 0, deleted)
+	requireNoError(t, err)
+	assertEqual(t, 0, deleted)
 }
 
 // --- IsExpired tests ---
@@ -1376,19 +1374,19 @@ func TestParser_IsExpiredRecentSession_Good(t *testing.T) {
 	sess := &Session{
 		EndTime: time.Now().Add(-5 * time.Minute),
 	}
-	assert.False(t, sess.IsExpired(1*time.Hour))
+	assertFalse(t, sess.IsExpired(1*time.Hour))
 }
 
 func TestParser_IsExpiredOldSession_Good(t *testing.T) {
 	sess := &Session{
 		EndTime: time.Now().Add(-2 * time.Hour),
 	}
-	assert.True(t, sess.IsExpired(1*time.Hour))
+	assertTrue(t, sess.IsExpired(1*time.Hour))
 }
 
 func TestParser_IsExpiredZeroEndTime_Bad(t *testing.T) {
 	sess := &Session{}
-	assert.False(t, sess.IsExpired(1*time.Hour))
+	assertFalse(t, sess.IsExpired(1*time.Hour))
 }
 
 // --- FetchSession tests ---
@@ -1400,43 +1398,43 @@ func TestParser_FetchSessionValidID_Good(t *testing.T) {
 	)
 
 	sess, stats, err := FetchSession(dir, "abc123")
-	require.NoError(t, err)
-	require.NotNil(t, sess)
-	require.NotNil(t, stats)
-	assert.Equal(t, "abc123", sess.ID)
-	assert.Len(t, sess.Events, 1)
+	requireNoError(t, err)
+	requireNotNil(t, sess)
+	requireNotNil(t, stats)
+	assertEqual(t, "abc123", sess.ID)
+	assertLen(t, sess.Events, 1)
 }
 
 func TestParser_FetchSessionPathTraversal_Ugly(t *testing.T) {
 	dir := t.TempDir()
 
 	_, _, err := FetchSession(dir, "../etc/passwd")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid session id")
+	requireError(t, err)
+	assertContains(t, err.Error(), "invalid session id")
 }
 
 func TestParser_FetchSessionBackslashTraversal_Ugly(t *testing.T) {
 	dir := t.TempDir()
 
 	_, _, err := FetchSession(dir, `foo\bar`)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid session id")
+	requireError(t, err)
+	assertContains(t, err.Error(), "invalid session id")
 }
 
 func TestParser_FetchSessionForwardSlash_Ugly(t *testing.T) {
 	dir := t.TempDir()
 
 	_, _, err := FetchSession(dir, "foo/bar")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid session id")
+	requireError(t, err)
+	assertContains(t, err.Error(), "invalid session id")
 }
 
 func TestParser_FetchSessionNotFound_Bad(t *testing.T) {
 	dir := t.TempDir()
 
 	_, _, err := FetchSession(dir, "nonexistent")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "open transcript")
+	requireError(t, err)
+	assertContains(t, err.Error(), "open transcript")
 }
 
 // --- ListSessions with truncated files ---
@@ -1453,12 +1451,12 @@ func TestParser_ListSessionsTruncatedFile_Good(t *testing.T) {
 	writeJSONL(t, dir, "partial.jsonl", lines...)
 
 	sessions, err := ListSessions(dir)
-	require.NoError(t, err)
-	require.Len(t, sessions, 1)
-	assert.False(t, sessions[0].StartTime.IsZero())
-	assert.False(t, sessions[0].EndTime.IsZero())
+	requireNoError(t, err)
+	requireLen(t, sessions, 1)
+	assertFalse(t, sessions[0].StartTime.IsZero())
+	assertFalse(t, sessions[0].EndTime.IsZero())
 	// End time should reflect the last valid timestamp.
-	assert.True(t, sessions[0].EndTime.After(sessions[0].StartTime))
+	assertTrue(t, sessions[0].EndTime.After(sessions[0].StartTime))
 }
 
 // --- PruneSessions tests ---

@@ -2,9 +2,9 @@
 package session
 
 import (
-	"html"
-	"path"
-	"time"
+	"html" // Note: intrinsic — escaping transcript content for generated HTML; stdlib encoder is the output contract
+	"path" // Note: intrinsic — output parent directory derivation for slash-separated paths; no core equivalent
+	"time" // Note: intrinsic — duration formatting thresholds for rendered summaries; no core equivalent
 
 	core "dappco.re/go/core"
 )
