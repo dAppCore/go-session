@@ -13,9 +13,13 @@ Claude Code JSONL transcript parser, analytics engine, and HTML timeline rendere
 ## Quick Start
 
 ```go
-import "dappco.re/go/session"
+import (
+	"fmt"
 
-sess, stats, err := session.ParseTranscript("/path/to/session.jsonl")
+	"dappco.re/go/session"
+)
+
+sess, _, err := session.ParseTranscript("/path/to/session.jsonl")
 analytics := session.Analyse(sess)
 fmt.Println(session.FormatAnalytics(analytics))
 

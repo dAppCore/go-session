@@ -50,10 +50,11 @@ import (
 
 func main() {
     // Parse a single transcript
-    sess, err := session.ParseTranscript("~/.claude/projects/abc123.jsonl")
+    sess, stats, err := session.ParseTranscript("~/.claude/projects/abc123.jsonl")
     if err != nil {
         log.Fatal(err)
     }
+    fmt.Printf("Skipped lines: %d\n", stats.SkippedLines)
     fmt.Printf("Session %s: %d events over %s\n",
         sess.ID, len(sess.Events), sess.EndTime.Sub(sess.StartTime))
 

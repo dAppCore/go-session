@@ -2,12 +2,11 @@
 package session
 
 import (
-	"io"      // Note: intrinsic — Reader, ReadCloser, and EOF contracts for transcript streams and hostFS handles; no core equivalent
-	"io/fs"   // Note: intrinsic — fs.FileInfo metadata returned from hostFS.Stat; no core equivalent
-	"iter"    // Note: intrinsic — public lazy sequence API for sessions and events; no core equivalent
-	"slices"  // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
-	"syscall" // Note: intrinsic — O_NOFOLLOW descriptor opens and Errno checks for transcript safety; no core equivalent
-	"time"    // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
+	"io"     // Note: intrinsic — Reader, ReadCloser, and EOF contracts for transcript streams and hostFS handles; no core equivalent
+	"io/fs"  // Note: intrinsic — fs.FileInfo metadata returned from hostFS.Stat; no core equivalent
+	"iter"   // Note: intrinsic — public lazy sequence API for sessions and events; no core equivalent
+	"slices" // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
+	"time"   // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
 
 	core "dappco.re/go/core"
 )
@@ -276,7 +275,7 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 	filePath := transcriptPath(projectsDir, id+".jsonl")
 	f, err := openTranscriptNoFollow(filePath)
 	if err != nil {
-		if err == syscall.ENOENT {
+		if isTranscriptMissing(err) {
 			return nil, nil, core.E("FetchSession", "open transcript", err)
 		}
 		return nil, nil, core.E("FetchSession", "invalid session path", nil)
@@ -674,44 +673,4 @@ func transcriptPath(projectsDir, name string) string {
 		return core.CleanPath(name, "/")
 	}
 	return core.CleanPath(core.JoinPath(projectsDir, name), "/")
-}
-
-type noFollowFile struct {
-	fd int
-}
-
-// Read reads bytes from a descriptor opened without following symlinks.
-func (f *noFollowFile) Read(p []byte) (int, error) {
-	n, err := syscall.Read(f.fd, p)
-	if err != nil {
-		return n, err
-	}
-	if n == 0 {
-		return 0, io.EOF
-	}
-	return n, nil
-}
-
-// Close closes a descriptor opened without following symlinks.
-func (f *noFollowFile) Close() error {
-	return syscall.Close(f.fd)
-}
-
-// openTranscriptNoFollow opens a regular transcript file without following symlinks.
-func openTranscriptNoFollow(filePath string) (io.ReadCloser, error) {
-	fd, err := syscall.Open(filePath, syscall.O_RDONLY|syscall.O_NOFOLLOW, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	var st syscall.Stat_t
-	if err := syscall.Fstat(fd, &st); err != nil {
-		_ = syscall.Close(fd)
-		return nil, err
-	}
-	if st.Mode&syscall.S_IFMT != syscall.S_IFREG {
-		_ = syscall.Close(fd)
-		return nil, core.E("openTranscriptNoFollow", "not a regular file", nil)
-	}
-	return &noFollowFile{fd: fd}, nil
 }

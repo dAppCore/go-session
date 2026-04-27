@@ -2,11 +2,9 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
+	core "dappco.re/go/core"
 	session "dappco.re/go/session"
 )
 
@@ -18,14 +16,16 @@ const transcript = `{"type":"user","timestamp":"2026-02-20T10:00:00Z","sessionId
 
 // main runs the CLI session smoke test.
 func main() {
-	dir, err := os.MkdirTemp("", "go-session-ax10-")
-	requireNoError(err, "create temporary directory")
+	fs := (&core.Fs{}).NewUnrestricted()
+	dir := fs.TempDir("go-session-ax10-")
+	require(dir != "", "create temporary directory")
 	defer func() {
-		_ = os.RemoveAll(dir)
+		_ = fs.DeleteAll(dir)
 	}()
 
-	transcriptPath := filepath.Join(dir, "ax10-session.jsonl")
-	requireNoError(os.WriteFile(transcriptPath, []byte(transcript), 0o600), "write transcript")
+	transcriptPath := core.Path(dir, "ax10-session.jsonl")
+	writeResult := fs.WriteMode(transcriptPath, transcript, 0o600)
+	require(writeResult.OK, "write transcript")
 
 	sess, stats, err := session.ParseTranscript(transcriptPath)
 	requireNoError(err, "parse transcript")
@@ -50,7 +50,7 @@ func main() {
 	require(analytics.ToolCounts["Bash"] == 1, "expected analytics Bash count")
 	expectedSuccessRate := successfulToolRate(sess)
 	require(analytics.SuccessRate == expectedSuccessRate, "expected analytics success rate")
-	require(strings.Contains(session.FormatAnalytics(analytics), "Bash"), "expected formatted analytics to include Bash")
+	require(core.Contains(session.FormatAnalytics(analytics), "Bash"), "expected formatted analytics to include Bash")
 
 	results, err := session.Search(dir, "ax10")
 	requireNoError(err, "search sessions")
@@ -66,13 +66,14 @@ func main() {
 	requireNoError(err, "fetch session")
 	require(fetched.ID == sess.ID, "expected fetched session to match parsed session")
 
-	htmlPath := filepath.Join(dir, "timeline.html")
+	htmlPath := core.Path(dir, "timeline.html")
 	requireNoError(session.RenderHTML(sess, htmlPath), "render HTML")
-	htmlBytes, err := os.ReadFile(htmlPath)
-	requireNoError(err, "read rendered HTML")
-	html := string(htmlBytes)
-	require(strings.Contains(html, "Session ax10"), "expected rendered HTML session title")
-	require(strings.Contains(html, "echo ax10"), "expected rendered HTML tool input")
+	readResult := fs.Read(htmlPath)
+	require(readResult.OK, "read rendered HTML")
+	html, ok := readResult.Value.(string)
+	require(ok, "read rendered HTML as string")
+	require(core.Contains(html, "Session ax10"), "expected rendered HTML session title")
+	require(core.Contains(html, "echo ax10"), "expected rendered HTML tool input")
 }
 
 // successfulToolRate calculates the same tool-call success ratio as session.Analyse.

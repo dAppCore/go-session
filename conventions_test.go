@@ -174,7 +174,7 @@ type parsedFile struct {
 func parseGoFiles(t *testing.T, dir string) []parsedFile {
 	t.Helper()
 
-	paths := core.PathGlob(path.Join(dir, "*.go"))
+	paths := collectGoPaths(dir)
 	if len(paths) == 0 {
 		t.Fatalf("no Go files found in %s", dir)
 	}
@@ -191,7 +191,7 @@ func parseGoFiles(t *testing.T, dir string) []parsedFile {
 
 		testingImportNames, hasTestingDotImport := testingImports(fileAST)
 		files = append(files, parsedFile{
-			path:                path.Base(filePath),
+			path:                relativeGoPath(dir, filePath),
 			ast:                 fileAST,
 			testingImportNames:  testingImportNames,
 			hasTestingDotImport: hasTestingDotImport,
@@ -200,22 +200,52 @@ func parseGoFiles(t *testing.T, dir string) []parsedFile {
 	return files
 }
 
+// collectGoPaths supports the session test suite.
+func collectGoPaths(dir string) []string {
+	var paths []string
+	for _, entryPath := range core.PathGlob(path.Join(dir, "*")) {
+		if hostFS.IsDir(entryPath) {
+			paths = append(paths, collectGoPaths(entryPath)...)
+			continue
+		}
+		if core.HasSuffix(entryPath, ".go") {
+			paths = append(paths, entryPath)
+		}
+	}
+	return paths
+}
+
+// relativeGoPath supports the session test suite.
+func relativeGoPath(root, filePath string) string {
+	prefix := core.TrimSuffix(root, "/")
+	if prefix == "." || prefix == "" {
+		return filePath
+	}
+	prefix += "/"
+	if core.HasPrefix(filePath, prefix) {
+		return filePath[len(prefix):]
+	}
+	return path.Base(filePath)
+}
+
 // TestConventions_ParseGoFilesMultiplePackages_Good verifies the behaviour covered by this test case.
 func TestConventions_ParseGoFilesMultiplePackages_Good(t *testing.T) {
 	dir := t.TempDir()
 
 	writeTestFile(t, path.Join(dir, "session.go"), "package session\n")
 	writeTestFile(t, path.Join(dir, "session_external_test.go"), "package session_test\n")
+	writeTestFile(t, path.Join(dir, "nested", "worker.go"), "package nested\n")
 	writeTestFile(t, path.Join(dir, "README.md"), "# ignored\n")
 
 	files := parseGoFiles(t, dir)
-	if len(files) != 2 {
-		t.Fatalf("expected 2 Go files, got %d", len(files))
+	if len(files) != 3 {
+		t.Fatalf("expected 3 Go files, got %d", len(files))
 	}
 
 	names := []string{files[0].path, files[1].path}
+	names = append(names, files[2].path)
 	slices.Sort(names)
-	if names[0] != "session.go" || names[1] != "session_external_test.go" {
+	if names[0] != "nested/worker.go" || names[1] != "session.go" || names[2] != "session_external_test.go" {
 		t.Fatalf("unexpected files: %v", names)
 	}
 }
