@@ -9,6 +9,7 @@ import (
 	"time"   // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
 
 	core "dappco.re/go/core"
+	coreerr "dappco.re/go/core/log"
 )
 
 // maxScannerBuffer is the maximum line length the scanner will accept.
@@ -149,6 +150,8 @@ func ListSessions(projectsDir string) ([]Session, error) {
 //	}
 func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 	return func(yield func(Session) bool) {
+		const op = "ListSessionsSeq"
+
 		matches := core.PathGlob(transcriptPath(projectsDir, "*.jsonl"))
 
 		var sessions []Session
@@ -158,6 +161,7 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 
 			f, err := openTranscriptNoFollow(filePath)
 			if err != nil {
+				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", err)
 				continue
 			}
 
@@ -183,7 +187,12 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 				return true
 			})
 			closeErr := f.Close()
-			if scanErr != nil || closeErr != nil {
+			if scanErr != nil {
+				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", scanErr)
+				continue
+			}
+			if closeErr != nil {
+				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", closeErr)
 				continue
 			}
 
@@ -269,16 +278,16 @@ func (s *Session) IsExpired(maxAge time.Duration) bool {
 // sess, stats, err := session.FetchSession("/tmp/projects", "abc123")
 func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 	if core.Contains(id, "..") || containsAny(id, `/\`) {
-		return nil, nil, core.E("FetchSession", "invalid session id", nil)
+		return nil, nil, coreerr.E("FetchSession", "invalid session id", nil)
 	}
 
 	filePath := transcriptPath(projectsDir, id+".jsonl")
 	f, err := openTranscriptNoFollow(filePath)
 	if err != nil {
 		if isTranscriptMissing(err) {
-			return nil, nil, core.E("FetchSession", "open transcript", err)
+			return nil, nil, coreerr.E("FetchSession", "open transcript", err)
 		}
-		return nil, nil, core.E("FetchSession", "invalid session path", nil)
+		return nil, nil, coreerr.E("FetchSession", "invalid session path", err)
 	}
 	defer func() {
 		_ = f.Close()
@@ -294,11 +303,11 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 	openResult := hostFS.Open(filePath)
 	if !openResult.OK {
-		return nil, nil, core.E("ParseTranscript", "open transcript", resultError(openResult))
+		return nil, nil, coreerr.E("ParseTranscript", "open transcript", resultError(openResult))
 	}
 	f, ok := openResult.Value.(io.ReadCloser)
 	if !ok {
-		return nil, nil, core.E("ParseTranscript", "unexpected file handle type", nil)
+		return nil, nil, coreerr.E("ParseTranscript", "unexpected file handle type", nil)
 	}
 	defer func() {
 		_ = f.Close()
@@ -317,7 +326,7 @@ func parseTranscriptFile(filePath string, r io.Reader) (*Session, *ParseStats, e
 		sess.Path = filePath
 	}
 	if err != nil {
-		return sess, stats, core.E("ParseTranscript", "parse transcript", err)
+		return sess, stats, coreerr.E("ParseTranscript", "parse transcript", err)
 	}
 	return sess, stats, nil
 }
@@ -331,7 +340,7 @@ func parseTranscriptFile(filePath string, r io.Reader) (*Session, *ParseStats, e
 func ParseTranscriptReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	sess, stats, err := parseFromReader(r, id)
 	if err != nil {
-		return sess, stats, core.E("ParseTranscriptReader", "parse transcript", err)
+		return sess, stats, coreerr.E("ParseTranscriptReader", "parse transcript", err)
 	}
 	return sess, stats, nil
 }
@@ -611,6 +620,8 @@ func truncate(s string, max int) string {
 
 // scanTranscriptLines streams newline-delimited records with a per-line size limit.
 func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool) error {
+	const op = "scanTranscriptLines"
+
 	if maxLineSize <= 0 {
 		maxLineSize = maxScannerBuffer
 	}
@@ -628,7 +639,7 @@ func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool)
 					continue
 				}
 				if len(line)+i-start > maxLineSize {
-					return core.E("scanTranscriptLines", core.Sprintf("line exceeds %d bytes", maxLineSize), nil)
+					return coreerr.E(op, core.Sprintf("line exceeds %d bytes", maxLineSize), nil)
 				}
 				line = append(line, chunk[start:i]...)
 				if !handle(trimLineBreak(line)) {
@@ -639,7 +650,7 @@ func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool)
 			}
 			if start < len(chunk) {
 				if len(line)+len(chunk)-start > maxLineSize {
-					return core.E("scanTranscriptLines", core.Sprintf("line exceeds %d bytes", maxLineSize), nil)
+					return coreerr.E(op, core.Sprintf("line exceeds %d bytes", maxLineSize), nil)
 				}
 				line = append(line, chunk[start:]...)
 			}
@@ -654,7 +665,7 @@ func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool)
 			return nil
 		}
 		if readErr != nil {
-			return readErr
+			return coreerr.E(op, "read error", readErr)
 		}
 	}
 }
