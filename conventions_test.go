@@ -15,6 +15,7 @@ import (
 
 var testNamePattern = regexp.MustCompile(`^Test[A-Za-z0-9]+_[A-Za-z0-9]+_(Good|Bad|Ugly)$`)
 
+// TestConventions_BannedImports_Good verifies the behaviour covered by this test case.
 func TestConventions_BannedImports_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
@@ -43,6 +44,7 @@ func TestConventions_BannedImports_Good(t *testing.T) {
 	}
 }
 
+// TestConventions_ErrorHandling_Good verifies the behaviour covered by this test case.
 func TestConventions_ErrorHandling_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
@@ -81,6 +83,7 @@ func TestConventions_ErrorHandling_Good(t *testing.T) {
 	}
 }
 
+// TestConventions_TestNaming_Good verifies the behaviour covered by this test case.
 func TestConventions_TestNaming_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
@@ -112,6 +115,7 @@ func TestConventions_TestNaming_Good(t *testing.T) {
 	}
 }
 
+// TestConventions_UsageComments_Good verifies the behaviour covered by this test case.
 func TestConventions_UsageComments_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
@@ -166,6 +170,7 @@ type parsedFile struct {
 	hasTestingDotImport bool
 }
 
+// parseGoFiles supports the session test suite.
 func parseGoFiles(t *testing.T, dir string) []parsedFile {
 	t.Helper()
 
@@ -195,6 +200,7 @@ func parseGoFiles(t *testing.T, dir string) []parsedFile {
 	return files
 }
 
+// TestConventions_ParseGoFilesMultiplePackages_Good verifies the behaviour covered by this test case.
 func TestConventions_ParseGoFilesMultiplePackages_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -214,12 +220,14 @@ func TestConventions_ParseGoFilesMultiplePackages_Good(t *testing.T) {
 	}
 }
 
+// TestConventions_IsTestingTFuncAliasedImport_Good verifies the behaviour covered by this test case.
 func TestConventions_IsTestingTFuncAliasedImport_Good(t *testing.T) {
 	fileAST, fn := parseTestFunc(t, `
 package session_test
 
 import t "testing"
 
+// TestConventions_AliasedImportContext_Good verifies the behaviour covered by this test case.
 func TestConventions_AliasedImportContext_Good(testcase *t.T) {}
 `, "TestConventions_AliasedImportContext_Good")
 
@@ -235,12 +243,14 @@ func TestConventions_AliasedImportContext_Good(testcase *t.T) {}
 	}
 }
 
+// TestConventions_IsTestingTFuncDotImport_Good verifies the behaviour covered by this test case.
 func TestConventions_IsTestingTFuncDotImport_Good(t *testing.T) {
 	fileAST, fn := parseTestFunc(t, `
 package session_test
 
 import . "testing"
 
+// TestConventions_DotImportContext_Good verifies the behaviour covered by this test case.
 func TestConventions_DotImportContext_Good(testcase *T) {}
 `, "TestConventions_DotImportContext_Good")
 
@@ -256,6 +266,14 @@ func TestConventions_DotImportContext_Good(testcase *T) {}
 	}
 }
 
+// TestConventions_TestHelpers_Good verifies the behaviour covered by this test case.
+func TestConventions_TestHelpers_Good(t *testing.T) {
+	requireEqual(t, "same", "same")
+	assertNil(t, nil)
+	assertNotNil(t, t)
+}
+
+// testingImports supports the session test suite.
 func testingImports(file *ast.File) (map[string]struct{}, bool) {
 	names := make(map[string]struct{})
 	hasDotImport := false
@@ -282,6 +300,7 @@ func testingImports(file *ast.File) (map[string]struct{}, bool) {
 	return names, hasDotImport
 }
 
+// isTestingTFunc supports the session test suite.
 func isTestingTFunc(file parsedFile, fn *ast.FuncDecl) bool {
 	if fn.Type == nil || fn.Type.Params == nil || len(fn.Type.Params.List) != 1 {
 		return false
@@ -311,6 +330,7 @@ func isTestingTFunc(file parsedFile, fn *ast.FuncDecl) bool {
 	}
 }
 
+// typeDocGroup supports the session test suite.
 func typeDocGroup(decl *ast.GenDecl, spec *ast.TypeSpec, index int) *ast.CommentGroup {
 	if spec.Doc != nil {
 		return spec.Doc
@@ -321,6 +341,7 @@ func typeDocGroup(decl *ast.GenDecl, spec *ast.TypeSpec, index int) *ast.Comment
 	return nil
 }
 
+// valueDocGroup supports the session test suite.
 func valueDocGroup(decl *ast.GenDecl, spec *ast.ValueSpec, index int) *ast.CommentGroup {
 	if spec.Doc != nil {
 		return spec.Doc
@@ -331,6 +352,7 @@ func valueDocGroup(decl *ast.GenDecl, spec *ast.ValueSpec, index int) *ast.Comme
 	return nil
 }
 
+// commentText supports the session test suite.
 func commentText(group *ast.CommentGroup) string {
 	if group == nil {
 		return ""
@@ -338,6 +360,7 @@ func commentText(group *ast.CommentGroup) string {
 	return core.Trim(group.Text())
 }
 
+// hasDocPrefix supports the session test suite.
 func hasDocPrefix(text, name string) bool {
 	if text == "" || !core.HasPrefix(text, name) {
 		return false
@@ -350,6 +373,7 @@ func hasDocPrefix(text, name string) bool {
 	return (next < 'A' || next > 'Z') && (next < 'a' || next > 'z') && (next < '0' || next > '9') && next != '_'
 }
 
+// hasUsageExample supports the session test suite.
 func hasUsageExample(text string) bool {
 	if text == "" {
 		return false
@@ -357,6 +381,7 @@ func hasUsageExample(text string) bool {
 	return core.HasPrefix(text, "Example:") || core.Contains(text, "\nExample:")
 }
 
+// testFileToken supports the session test suite.
 func testFileToken(filePath string) string {
 	stem := core.TrimSuffix(path.Base(filePath), "_test.go")
 	switch stem {
@@ -370,6 +395,7 @@ func testFileToken(filePath string) string {
 	}
 }
 
+// writeTestFile supports the session test suite.
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()
 
@@ -379,6 +405,7 @@ func writeTestFile(t *testing.T, path, content string) {
 	}
 }
 
+// parseTestFunc supports the session test suite.
 func parseTestFunc(t *testing.T, src, name string) (*ast.File, *ast.FuncDecl) {
 	t.Helper()
 

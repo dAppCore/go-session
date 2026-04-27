@@ -8,6 +8,7 @@ import (
 	core "dappco.re/go/core"
 )
 
+// testContext supports the session test suite.
 func testContext(msgAndArgs []any) string {
 	if len(msgAndArgs) == 0 {
 		return ""
@@ -15,6 +16,7 @@ func testContext(msgAndArgs []any) string {
 	return core.Sprintf("%v: ", msgAndArgs[0])
 }
 
+// isNil supports the session test suite.
 func isNil(v any) bool {
 	if v == nil {
 		return true
@@ -28,6 +30,7 @@ func isNil(v any) bool {
 	}
 }
 
+// isEmpty supports the session test suite.
 func isEmpty(v any) bool {
 	if isNil(v) {
 		return true
@@ -41,6 +44,7 @@ func isEmpty(v any) bool {
 	}
 }
 
+// valueLen supports the session test suite.
 func valueLen(v any) (int, bool) {
 	if v == nil {
 		return 0, true
@@ -54,6 +58,7 @@ func valueLen(v any) (int, bool) {
 	}
 }
 
+// requireNoError stops the current test case when its condition is not met.
 func requireNoError(t *testing.T, err error, msgAndArgs ...any) {
 	t.Helper()
 	if err != nil {
@@ -61,6 +66,7 @@ func requireNoError(t *testing.T, err error, msgAndArgs ...any) {
 	}
 }
 
+// requireError stops the current test case when its condition is not met.
 func requireError(t *testing.T, err error, msgAndArgs ...any) {
 	t.Helper()
 	if err == nil {
@@ -68,6 +74,7 @@ func requireError(t *testing.T, err error, msgAndArgs ...any) {
 	}
 }
 
+// requireEqual stops the current test case when its condition is not met.
 func requireEqual(t *testing.T, want, got any, msgAndArgs ...any) {
 	t.Helper()
 	if !reflect.DeepEqual(want, got) {
@@ -75,6 +82,7 @@ func requireEqual(t *testing.T, want, got any, msgAndArgs ...any) {
 	}
 }
 
+// requireTrue stops the current test case when its condition is not met.
 func requireTrue(t *testing.T, cond bool, msgAndArgs ...any) {
 	t.Helper()
 	if !cond {
@@ -82,6 +90,7 @@ func requireTrue(t *testing.T, cond bool, msgAndArgs ...any) {
 	}
 }
 
+// requireNotNil stops the current test case when its condition is not met.
 func requireNotNil(t *testing.T, v any, msgAndArgs ...any) {
 	t.Helper()
 	if isNil(v) {
@@ -89,6 +98,7 @@ func requireNotNil(t *testing.T, v any, msgAndArgs ...any) {
 	}
 }
 
+// requireLen stops the current test case when its condition is not met.
 func requireLen(t *testing.T, v any, want int, msgAndArgs ...any) {
 	t.Helper()
 	got, ok := valueLen(v)
@@ -100,73 +110,84 @@ func requireLen(t *testing.T, v any, want int, msgAndArgs ...any) {
 	}
 }
 
+// assertEqual records a test failure when its condition is not met.
 func assertEqual(t *testing.T, want, got any, msgAndArgs ...any) {
 	t.Helper()
 	if !reflect.DeepEqual(want, got) {
-		t.Fatalf("%swant %v, got %v", testContext(msgAndArgs), want, got)
+		t.Errorf("%swant %v, got %v", testContext(msgAndArgs), want, got)
 	}
 }
 
+// assertTrue records a test failure when its condition is not met.
 func assertTrue(t *testing.T, cond bool, msgAndArgs ...any) {
 	t.Helper()
 	if !cond {
-		t.Fatalf("%sexpected true", testContext(msgAndArgs))
+		t.Errorf("%sexpected true", testContext(msgAndArgs))
 	}
 }
 
+// assertFalse records a test failure when its condition is not met.
 func assertFalse(t *testing.T, cond bool, msgAndArgs ...any) {
 	t.Helper()
 	if cond {
-		t.Fatalf("%sexpected false", testContext(msgAndArgs))
+		t.Errorf("%sexpected false", testContext(msgAndArgs))
 	}
 }
 
+// assertNil records a test failure when its condition is not met.
 func assertNil(t *testing.T, v any, msgAndArgs ...any) {
 	t.Helper()
 	if !isNil(v) {
-		t.Fatalf("%sexpected nil, got %v", testContext(msgAndArgs), v)
+		t.Errorf("%sexpected nil, got %v", testContext(msgAndArgs), v)
 	}
 }
 
+// assertNotNil records a test failure when its condition is not met.
 func assertNotNil(t *testing.T, v any, msgAndArgs ...any) {
 	t.Helper()
 	if isNil(v) {
-		t.Fatalf("%sexpected non-nil", testContext(msgAndArgs))
+		t.Errorf("%sexpected non-nil", testContext(msgAndArgs))
 	}
 }
 
+// assertEmpty records a test failure when its condition is not met.
 func assertEmpty(t *testing.T, v any, msgAndArgs ...any) {
 	t.Helper()
 	if !isEmpty(v) {
-		t.Fatalf("%sexpected empty, got %v", testContext(msgAndArgs), v)
+		t.Errorf("%sexpected empty, got %v", testContext(msgAndArgs), v)
 	}
 }
 
+// assertLen records a test failure when its condition is not met.
 func assertLen(t *testing.T, v any, want int, msgAndArgs ...any) {
 	t.Helper()
 	got, ok := valueLen(v)
 	if !ok {
-		t.Fatalf("%sexpected value with length, got %T", testContext(msgAndArgs), v)
+		t.Errorf("%sexpected value with length, got %T", testContext(msgAndArgs), v)
+		return
 	}
 	if want != got {
-		t.Fatalf("%swant length %v, got %v", testContext(msgAndArgs), want, got)
+		t.Errorf("%swant length %v, got %v", testContext(msgAndArgs), want, got)
 	}
 }
 
+// assertContains records a test failure when its condition is not met.
 func assertContains(t *testing.T, s, substr string, msgAndArgs ...any) {
 	t.Helper()
 	if !core.Contains(s, substr) {
-		t.Fatalf("%sexpected %q to contain %q", testContext(msgAndArgs), s, substr)
+		t.Errorf("%sexpected %q to contain %q", testContext(msgAndArgs), s, substr)
 	}
 }
 
+// assertNotContains records a test failure when its condition is not met.
 func assertNotContains(t *testing.T, s, substr string, msgAndArgs ...any) {
 	t.Helper()
 	if core.Contains(s, substr) {
-		t.Fatalf("%sexpected %q not to contain %q", testContext(msgAndArgs), s, substr)
+		t.Errorf("%sexpected %q not to contain %q", testContext(msgAndArgs), s, substr)
 	}
 }
 
+// assertInDelta records a test failure when its condition is not met.
 func assertInDelta(t *testing.T, want, got, delta float64, msgAndArgs ...any) {
 	t.Helper()
 	diff := want - got
@@ -174,6 +195,6 @@ func assertInDelta(t *testing.T, want, got, delta float64, msgAndArgs ...any) {
 		diff = -diff
 	}
 	if diff > delta {
-		t.Fatalf("%swant %v within %v, got %v", testContext(msgAndArgs), want, delta, got)
+		t.Errorf("%swant %v within %v, got %v", testContext(msgAndArgs), want, delta, got)
 	}
 }

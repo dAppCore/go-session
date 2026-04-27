@@ -8,7 +8,6 @@ description: How to build, test, lint, and contribute to go-session.
 ## Prerequisites
 
 - **Go 1.26 or later** -- the module requires Go 1.26 (`go.mod`). The benchmark suite uses `b.Loop()`, introduced in Go 1.25.
-- **`github.com/stretchr/testify`** -- test-only dependency, fetched automatically by `go test`.
 - **`vhs`** (`github.com/charmbracelet/vhs`) -- optional, required only for `RenderMP4`. Install with `go install github.com/charmbracelet/vhs@latest`.
 - **`golangci-lint`** -- optional, for running the full lint suite. Configuration is in `.golangci.yml`.
 
@@ -221,7 +220,7 @@ Co-Authored-By: Virgil <virgil@lethean.io>
 
 ## Module Path and Go Workspace
 
-The module path is `dappco.re/go/core/session`. If this package is used within a Go workspace, add it with:
+The module path is `dappco.re/go/session`. If this package is used within a Go workspace, add it with:
 
 ```bash
 go work use ./go-session

@@ -8,6 +8,7 @@ import (
 	core "dappco.re/go/core"
 )
 
+// TestVideo_GenerateTapeBasicSession_Good verifies the behaviour covered by this test case.
 func TestVideo_GenerateTapeBasicSession_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "tape-test-12345678",
@@ -42,6 +43,7 @@ func TestVideo_GenerateTapeBasicSession_Good(t *testing.T) {
 	assertContains(t, tape, "# Read: /tmp/file.go")
 }
 
+// TestVideo_GenerateTapeSkipsNonToolEvents_Good verifies the behaviour covered by this test case.
 func TestVideo_GenerateTapeSkipsNonToolEvents_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "skip-test",
@@ -62,6 +64,7 @@ func TestVideo_GenerateTapeSkipsNonToolEvents_Good(t *testing.T) {
 	assertContains(t, tape, "echo hi")
 }
 
+// TestVideo_GenerateTapeFailedCommand_Good verifies the behaviour covered by this test case.
 func TestVideo_GenerateTapeFailedCommand_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "fail-test",
@@ -81,6 +84,7 @@ func TestVideo_GenerateTapeFailedCommand_Good(t *testing.T) {
 	assertContains(t, tape, `"# ✗ FAILED"`)
 }
 
+// TestVideo_GenerateTapeLongOutput_Good verifies the behaviour covered by this test case.
 func TestVideo_GenerateTapeLongOutput_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "long-test",
@@ -101,6 +105,7 @@ func TestVideo_GenerateTapeLongOutput_Good(t *testing.T) {
 	assertContains(t, tape, "...")
 }
 
+// TestVideo_GenerateTapeTaskEvent_Good verifies the behaviour covered by this test case.
 func TestVideo_GenerateTapeTaskEvent_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "task-test",
@@ -118,6 +123,7 @@ func TestVideo_GenerateTapeTaskEvent_Good(t *testing.T) {
 	assertContains(t, tape, "# Agent: [research] Analyse code structure")
 }
 
+// TestVideo_GenerateTapeEditWriteEvents_Good verifies the behaviour covered by this test case.
 func TestVideo_GenerateTapeEditWriteEvents_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "edit-test",
@@ -133,6 +139,7 @@ func TestVideo_GenerateTapeEditWriteEvents_Good(t *testing.T) {
 	assertContains(t, tape, "# Write: /tmp/new.go (50 bytes)")
 }
 
+// TestVideo_GenerateTapeEmptySession_Good verifies the behaviour covered by this test case.
 func TestVideo_GenerateTapeEmptySession_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "empty-test",
@@ -157,6 +164,7 @@ func TestVideo_GenerateTapeEmptySession_Good(t *testing.T) {
 	assertEqual(t, 0, toolLines)
 }
 
+// TestVideo_GenerateTapeBashEmptyCommand_Bad verifies the behaviour covered by this test case.
 func TestVideo_GenerateTapeBashEmptyCommand_Bad(t *testing.T) {
 	sess := &Session{
 		ID:        "empty-cmd",
@@ -171,22 +179,26 @@ func TestVideo_GenerateTapeBashEmptyCommand_Bad(t *testing.T) {
 	assertNotContains(t, tape, `"$ "`)
 }
 
+// TestVideo_ExtractCommandStripsDescriptionSuffix_Good verifies the behaviour covered by this test case.
 func TestVideo_ExtractCommandStripsDescriptionSuffix_Good(t *testing.T) {
 	assertEqual(t, "ls -la", extractCommand("ls -la # list files"))
 	assertEqual(t, "go test ./...", extractCommand("go test ./..."))
 	assertEqual(t, "echo hello", extractCommand("echo hello"))
 }
 
+// TestVideo_ExtractCommandNoDescription_Good verifies the behaviour covered by this test case.
 func TestVideo_ExtractCommandNoDescription_Good(t *testing.T) {
 	assertEqual(t, "plain command", extractCommand("plain command"))
 }
 
+// TestVideo_ExtractCommandDescriptionAtStart_Good verifies the behaviour covered by this test case.
 func TestVideo_ExtractCommandDescriptionAtStart_Good(t *testing.T) {
 	// " # " at position 0 means idx <= 0, so it returns the whole input
 	result := extractCommand(" # description only")
 	assertEqual(t, " # description only", result)
 }
 
+// TestVideo_RenderMP4NoVHS_Ugly verifies the behaviour covered by this test case.
 func TestVideo_RenderMP4NoVHS_Ugly(t *testing.T) {
 	// Skip if vhs is actually installed (this tests the error path)
 	if lookupExecutable("vhs") != "" {

@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// TestAnalytics_AnalyseEmptySession_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseEmptySession_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "empty",
@@ -27,12 +28,14 @@ func TestAnalytics_AnalyseEmptySession_Good(t *testing.T) {
 	assertEqual(t, 0, a.EstimatedOutputTokens)
 }
 
+// TestAnalytics_AnalyseNilSession_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseNilSession_Good(t *testing.T) {
 	a := Analyse(nil)
 	requireNotNil(t, a)
 	assertEqual(t, 0, a.EventCount)
 }
 
+// TestAnalytics_AnalyseSingleToolCall_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseSingleToolCall_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "single",
@@ -63,6 +66,7 @@ func TestAnalytics_AnalyseSingleToolCall_Good(t *testing.T) {
 	assertEqual(t, 2*time.Second, a.MaxLatency["Bash"])
 }
 
+// TestAnalytics_AnalyseMixedToolsWithErrors_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseMixedToolsWithErrors_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "mixed",
@@ -144,6 +148,7 @@ func TestAnalytics_AnalyseMixedToolsWithErrors_Good(t *testing.T) {
 	assertEqual(t, 2100*time.Millisecond, a.ActiveTime)
 }
 
+// TestAnalytics_AnalyseLatencyCalculations_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseLatencyCalculations_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "latency",
@@ -188,6 +193,7 @@ func TestAnalytics_AnalyseLatencyCalculations_Good(t *testing.T) {
 	assertEqual(t, 200*time.Millisecond, a.MaxLatency["Read"])
 }
 
+// TestAnalytics_AnalyseTokenEstimation_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseTokenEstimation_Good(t *testing.T) {
 	// 4 chars = ~1 token
 	sess := &Session{
@@ -222,6 +228,7 @@ func TestAnalytics_AnalyseTokenEstimation_Good(t *testing.T) {
 	assertEqual(t, 50, a.EstimatedOutputTokens)
 }
 
+// TestAnalytics_FormatAnalyticsOutput_Good verifies the behaviour covered by this test case.
 func TestAnalytics_FormatAnalyticsOutput_Good(t *testing.T) {
 	a := &SessionAnalytics{
 		Duration:              5 * time.Minute,
@@ -265,6 +272,7 @@ func TestAnalytics_FormatAnalyticsOutput_Good(t *testing.T) {
 	assertContains(t, output, "Tool Breakdown")
 }
 
+// TestAnalytics_FormatAnalyticsEmptyAnalytics_Good verifies the behaviour covered by this test case.
 func TestAnalytics_FormatAnalyticsEmptyAnalytics_Good(t *testing.T) {
 	a := &SessionAnalytics{
 		ToolCounts:  make(map[string]int),

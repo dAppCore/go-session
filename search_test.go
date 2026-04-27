@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestSearch_SearchEmptyDir_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchEmptyDir_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -14,6 +15,7 @@ func TestSearch_SearchEmptyDir_Good(t *testing.T) {
 	assertEmpty(t, results)
 }
 
+// TestSearch_SearchNoMatches_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchNoMatches_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
@@ -28,6 +30,7 @@ func TestSearch_SearchNoMatches_Good(t *testing.T) {
 	assertEmpty(t, results)
 }
 
+// TestSearch_SearchSingleMatch_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchSingleMatch_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
@@ -46,6 +49,7 @@ func TestSearch_SearchSingleMatch_Good(t *testing.T) {
 	assertContains(t, results[0].Match, "go test")
 }
 
+// TestSearch_SearchSeqSingleMatch_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchSeqSingleMatch_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
@@ -65,6 +69,7 @@ func TestSearch_SearchSeqSingleMatch_Good(t *testing.T) {
 	assertEqual(t, "Bash", results[0].Tool)
 }
 
+// TestSearch_SearchMultipleMatches_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchMultipleMatches_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session1.jsonl",
@@ -89,6 +94,7 @@ func TestSearch_SearchMultipleMatches_Good(t *testing.T) {
 	assertLen(t, results, 3, "should find matches across both sessions")
 }
 
+// TestSearch_SearchCaseInsensitive_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchCaseInsensitive_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
@@ -103,6 +109,7 @@ func TestSearch_SearchCaseInsensitive_Good(t *testing.T) {
 	assertLen(t, results, 1, "search should be case-insensitive")
 }
 
+// TestSearch_SearchMatchesInOutput_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchMatchesInOutput_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
@@ -119,6 +126,7 @@ func TestSearch_SearchMatchesInOutput_Good(t *testing.T) {
 	assertContains(t, results[0].Match, "cat log.txt")
 }
 
+// TestSearch_SearchSkipsNonToolEvents_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchSkipsNonToolEvents_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session.jsonl",
@@ -132,6 +140,7 @@ func TestSearch_SearchSkipsNonToolEvents_Good(t *testing.T) {
 	assertEmpty(t, results, "should only match tool_use events, not user/assistant text")
 }
 
+// TestSearch_SearchNonJSONLIgnored_Good verifies the behaviour covered by this test case.
 func TestSearch_SearchNonJSONLIgnored_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeResult := hostFS.Write(path.Join(dir, "readme.md"), "go test")
@@ -142,6 +151,7 @@ func TestSearch_SearchNonJSONLIgnored_Good(t *testing.T) {
 	assertEmpty(t, results, "non-JSONL files should be ignored")
 }
 
+// TestSearch_SearchMalformedSessionSkipped_Bad verifies the behaviour covered by this test case.
 func TestSearch_SearchMalformedSessionSkipped_Bad(t *testing.T) {
 	dir := t.TempDir()
 

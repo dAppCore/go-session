@@ -2,6 +2,8 @@ version: "3"
 
 env:
   GOWORK: off
+  GOPATH: /tmp/gopath-gosession
+  GOMODCACHE: /tmp/gomodcache-gosession
   GOCACHE: /tmp/go-session-go-build-cache
 
 tasks:
@@ -11,4 +13,6 @@ tasks:
   test:
     dir: ../../..
     cmds:
+      - go vet ./...
+      - go test ./...
       - go run ./tests/cli/session

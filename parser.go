@@ -6,7 +6,7 @@ import (
 	"io/fs"   // Note: intrinsic — fs.FileInfo metadata returned from hostFS.Stat; no core equivalent
 	"iter"    // Note: intrinsic — public lazy sequence API for sessions and events; no core equivalent
 	"slices"  // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
-	"syscall" // Note: intrinsic — Stat_t.Mode lstat bits used to reject symlinked transcript files; no core equivalent
+	"syscall" // Note: intrinsic — O_NOFOLLOW descriptor opens and Errno checks for transcript safety; no core equivalent
 	"time"    // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
 
 	core "dappco.re/go/core"
@@ -154,19 +154,11 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 
 		var sessions []Session
 		for _, filePath := range matches {
-			if isSymlink(filePath) {
-				continue
-			}
-
 			base := core.PathBase(filePath)
 			id := core.TrimSuffix(base, ".jsonl")
 
-			infoResult := hostFS.Stat(filePath)
-			if !infoResult.OK {
-				continue
-			}
-			info, ok := infoResult.Value.(fs.FileInfo)
-			if !ok {
+			f, err := openTranscriptNoFollow(filePath)
+			if err != nil {
 				continue
 			}
 
@@ -176,17 +168,8 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 			}
 
 			// Quick scan for first and last timestamps
-			openResult := hostFS.Open(filePath)
-			if !openResult.OK {
-				continue
-			}
-			f, ok := openResult.Value.(io.ReadCloser)
-			if !ok {
-				continue
-			}
-
 			var firstTS, lastTS string
-			scanTranscriptLines(f, maxScannerBuffer, func(line []byte) bool {
+			scanErr := scanTranscriptLines(f, maxScannerBuffer, func(line []byte) bool {
 				var entry rawEntry
 				if !core.JSONUnmarshal(line, &entry).OK {
 					return true
@@ -200,7 +183,10 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 				lastTS = entry.Timestamp
 				return true
 			})
-			f.Close()
+			closeErr := f.Close()
+			if scanErr != nil || closeErr != nil {
+				continue
+			}
 
 			if firstTS != "" {
 				if t, err := time.Parse(time.RFC3339Nano, firstTS); err == nil {
@@ -213,7 +199,12 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 				}
 			}
 			if s.StartTime.IsZero() {
-				s.StartTime = info.ModTime()
+				infoResult := hostFS.Stat(filePath)
+				if infoResult.OK {
+					if info, ok := infoResult.Value.(fs.FileInfo); ok {
+						s.StartTime = info.ModTime()
+					}
+				}
 			}
 
 			sessions = append(sessions, s)
@@ -283,10 +274,17 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 	}
 
 	filePath := transcriptPath(projectsDir, id+".jsonl")
-	if !isSafeProjectFile(filePath) {
+	f, err := openTranscriptNoFollow(filePath)
+	if err != nil {
+		if err == syscall.ENOENT {
+			return nil, nil, core.E("FetchSession", "open transcript", err)
+		}
 		return nil, nil, core.E("FetchSession", "invalid session path", nil)
 	}
-	return ParseTranscript(filePath)
+	defer func() {
+		_ = f.Close()
+	}()
+	return parseTranscriptFile(filePath, f)
 }
 
 // ParseTranscript reads a JSONL session file and returns structured events.
@@ -303,12 +301,19 @@ func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 	if !ok {
 		return nil, nil, core.E("ParseTranscript", "unexpected file handle type", nil)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
+	return parseTranscriptFile(filePath, f)
+}
+
+// parseTranscriptFile parses an already-open transcript reader and assigns path metadata.
+func parseTranscriptFile(filePath string, r io.Reader) (*Session, *ParseStats, error) {
 	base := core.PathBase(filePath)
 	id := core.TrimSuffix(base, ".jsonl")
 
-	sess, stats, err := parseFromReader(f, id)
+	sess, stats, err := parseFromReader(r, id)
 	if sess != nil {
 		sess.Path = filePath
 	}
@@ -504,6 +509,7 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	return sess, stats, nil
 }
 
+// extractToolInput converts raw Claude tool input into a concise display string.
 func extractToolInput(toolName string, raw rawJSON) string {
 	if raw == nil {
 		return ""
@@ -573,6 +579,7 @@ func extractToolInput(toolName string, raw rawJSON) string {
 	return ""
 }
 
+// extractResultContent converts Claude tool_result content into plain text.
 func extractResultContent(content any) string {
 	switch v := content.(type) {
 	case string:
@@ -595,6 +602,7 @@ func extractResultContent(content any) string {
 	return core.Sprint(content)
 }
 
+// truncate returns s capped to max bytes with an ellipsis marker.
 func truncate(s string, max int) string {
 	if len(s) <= max {
 		return s
@@ -602,6 +610,7 @@ func truncate(s string, max int) string {
 	return s[:max] + "..."
 }
 
+// scanTranscriptLines streams newline-delimited records with a per-line size limit.
 func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool) error {
 	if maxLineSize <= 0 {
 		maxLineSize = maxScannerBuffer
@@ -651,6 +660,7 @@ func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool)
 	}
 }
 
+// trimLineBreak removes a trailing carriage return from a scanned line.
 func trimLineBreak(line []byte) []byte {
 	if len(line) > 0 && line[len(line)-1] == '\r' {
 		return line[:len(line)-1]
@@ -658,6 +668,7 @@ func trimLineBreak(line []byte) []byte {
 	return line
 }
 
+// transcriptPath joins a projects directory and transcript file name.
 func transcriptPath(projectsDir, name string) string {
 	if projectsDir == "" {
 		return core.CleanPath(name, "/")
@@ -665,14 +676,42 @@ func transcriptPath(projectsDir, name string) string {
 	return core.CleanPath(core.JoinPath(projectsDir, name), "/")
 }
 
-func isSymlink(filePath string) bool {
-	var st syscall.Stat_t
-	if err := syscall.Lstat(filePath, &st); err != nil {
-		return false
-	}
-	return st.Mode&syscall.S_IFMT == syscall.S_IFLNK
+type noFollowFile struct {
+	fd int
 }
 
-func isSafeProjectFile(filePath string) bool {
-	return !isSymlink(filePath)
+// Read reads bytes from a descriptor opened without following symlinks.
+func (f *noFollowFile) Read(p []byte) (int, error) {
+	n, err := syscall.Read(f.fd, p)
+	if err != nil {
+		return n, err
+	}
+	if n == 0 {
+		return 0, io.EOF
+	}
+	return n, nil
+}
+
+// Close closes a descriptor opened without following symlinks.
+func (f *noFollowFile) Close() error {
+	return syscall.Close(f.fd)
+}
+
+// openTranscriptNoFollow opens a regular transcript file without following symlinks.
+func openTranscriptNoFollow(filePath string) (io.ReadCloser, error) {
+	fd, err := syscall.Open(filePath, syscall.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	var st syscall.Stat_t
+	if err := syscall.Fstat(fd, &st); err != nil {
+		_ = syscall.Close(fd)
+		return nil, err
+	}
+	if st.Mode&syscall.S_IFMT != syscall.S_IFREG {
+		_ = syscall.Close(fd)
+		return nil, core.E("openTranscriptNoFollow", "not a regular file", nil)
+	}
+	return &noFollowFile{fd: fd}, nil
 }

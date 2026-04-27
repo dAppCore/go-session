@@ -2,7 +2,7 @@
 
 This file provides guidance to Codex when working in this repository.
 
-Claude Code JSONL transcript parser, analytics engine, and HTML/video renderer. Module: `dappco.re/go/core/session`
+Claude Code JSONL transcript parser, analytics engine, and HTML/video renderer. Module: `dappco.re/go/session`
 
 ## Commands
 

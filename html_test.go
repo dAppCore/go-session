@@ -8,6 +8,7 @@ import (
 	core "dappco.re/go/core"
 )
 
+// TestHTML_RenderHTMLBasicSession_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLBasicSession_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/output.html"
@@ -78,6 +79,7 @@ func TestHTML_RenderHTMLBasicSession_Good(t *testing.T) {
 	assertContains(t, html, "function filterEvents")
 }
 
+// TestHTML_RenderHTMLEmptySession_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLEmptySession_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/empty.html"
@@ -102,6 +104,7 @@ func TestHTML_RenderHTMLEmptySession_Good(t *testing.T) {
 	assertNotContains(t, html, "errors</span>")
 }
 
+// TestHTML_RenderHTMLWithErrors_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLWithErrors_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/errors.html"
@@ -146,6 +149,7 @@ func TestHTML_RenderHTMLWithErrors_Good(t *testing.T) {
 	assertContains(t, html, "&#10003;") // check mark for success
 }
 
+// TestHTML_RenderHTMLSpecialCharacters_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLSpecialCharacters_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/special.html"
@@ -186,6 +190,7 @@ func TestHTML_RenderHTMLSpecialCharacters_Good(t *testing.T) {
 	assertContains(t, html, "&amp;")
 }
 
+// TestHTML_RenderHTMLInvalidPath_Ugly verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLInvalidPath_Ugly(t *testing.T) {
 	sess := &Session{
 		ID:     "test",
@@ -197,6 +202,7 @@ func TestHTML_RenderHTMLInvalidPath_Ugly(t *testing.T) {
 	assertContains(t, err.Error(), "parent directory does not exist")
 }
 
+// TestHTML_RenderHTMLLabelsByToolType_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLLabelsByToolType_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/labels.html"

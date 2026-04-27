@@ -39,7 +39,7 @@ The input label adapts to the tool type:
 [go-session] Installation
 
 ```bash
-go get dappco.re/go/core/session@latest
+go get dappco.re/go/session@latest
 ```
 
 ### 5. go-session [convention] (score: -0.004)

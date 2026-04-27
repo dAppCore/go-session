@@ -1,13 +1,13 @@
 # go-session
 
-`dappco.re/go/core/session` -- Claude Code session parser and visualiser.
+`dappco.re/go/session` -- Claude Code session parser and visualiser.
 
 Reads JSONL transcript files produced by Claude Code, extracts structured events, and renders them as interactive HTML timelines or MP4 videos. Zero external dependencies (stdlib only).
 
 ## Installation
 
 ```bash
-go get dappco.re/go/core/session@latest
+go get dappco.re/go/session@latest
 ```
 
 ## Core Types
@@ -45,7 +45,7 @@ import (
     "fmt"
     "log"
 
-    "dappco.re/go/core/session"
+    "dappco.re/go/session"
 )
 
 func main() {

@@ -108,6 +108,7 @@ func writeJSONL(t *testing.T, dir string, name string, lines ...string) string {
 	return filePath
 }
 
+// setFileTimes supports the session test suite.
 func setFileTimes(filePath string, atime, mtime time.Time) error {
 	return syscall.UtimesNano(filePath, []syscall.Timespec{
 		syscall.NsecToTimespec(atime.UnixNano()),
@@ -117,6 +118,7 @@ func setFileTimes(filePath string, atime, mtime time.Time) error {
 
 // --- ParseTranscript tests ---
 
+// TestParser_ParseTranscriptMinimalValid_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptMinimalValid_Good(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "minimal.jsonl",
@@ -142,6 +144,7 @@ func TestParser_ParseTranscriptMinimalValid_Good(t *testing.T) {
 	assertEqual(t, "Hi there!", sess.Events[1].Input)
 }
 
+// TestParser_ParseTranscriptToolCalls_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptToolCalls_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -233,6 +236,7 @@ func TestParser_ParseTranscriptToolCalls_Good(t *testing.T) {
 	assertEqual(t, "[research] Code analysis", toolEvents[6].Input)
 }
 
+// TestParser_ParseTranscriptToolError_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptToolError_Good(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "error.jsonl",
@@ -257,6 +261,7 @@ func TestParser_ParseTranscriptToolError_Good(t *testing.T) {
 	assertContains(t, toolEvents[0].ErrorMsg, "No such file or directory")
 }
 
+// TestParser_ParseTranscriptEmptyFile_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptEmptyFile_Bad(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "empty.jsonl")
@@ -271,6 +276,7 @@ func TestParser_ParseTranscriptEmptyFile_Bad(t *testing.T) {
 	assertTrue(t, sess.StartTime.IsZero())
 }
 
+// TestParser_ParseTranscriptMalformedJSON_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptMalformedJSON_Bad(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "malformed.jsonl",
@@ -291,6 +297,7 @@ func TestParser_ParseTranscriptMalformedJSON_Bad(t *testing.T) {
 	assertEqual(t, "assistant", sess.Events[1].Type)
 }
 
+// TestParser_ParseTranscriptTruncatedJSONL_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptTruncatedJSONL_Bad(t *testing.T) {
 	dir := t.TempDir()
 	validLine := userTextEntry(ts(0), "Hello")
@@ -309,6 +316,7 @@ func TestParser_ParseTranscriptTruncatedJSONL_Bad(t *testing.T) {
 	assertEqual(t, "user", sess.Events[0].Type)
 }
 
+// TestParser_ParseTranscriptLargeSession_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptLargeSession_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -342,6 +350,7 @@ func TestParser_ParseTranscriptLargeSession_Good(t *testing.T) {
 	assertEqual(t, 1100, toolCount, "all 1100 tool events should be parsed")
 }
 
+// TestParser_ParseTranscriptNestedToolResults_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptNestedToolResults_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -391,6 +400,7 @@ func TestParser_ParseTranscriptNestedToolResults_Good(t *testing.T) {
 	assertContains(t, toolEvents[0].Output, "Second block")
 }
 
+// TestParser_ParseTranscriptNestedMapResult_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptNestedMapResult_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -435,12 +445,14 @@ func TestParser_ParseTranscriptNestedMapResult_Good(t *testing.T) {
 	assertContains(t, toolEvents[0].Output, "file contents here")
 }
 
+// TestParser_ParseTranscriptFileNotFound_Ugly verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptFileNotFound_Ugly(t *testing.T) {
 	_, _, err := ParseTranscript("/nonexistent/path/session.jsonl")
 	requireError(t, err)
 	assertContains(t, err.Error(), "open transcript")
 }
 
+// TestParser_ParseTranscriptSessionIDFromFilename_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptSessionIDFromFilename_Good(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "abc123def456.jsonl",
@@ -452,6 +464,7 @@ func TestParser_ParseTranscriptSessionIDFromFilename_Good(t *testing.T) {
 	assertEqual(t, "abc123def456", sess.ID)
 }
 
+// TestParser_ParseTranscriptTimestampsTracked_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptTimestampsTracked_Good(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "timestamps.jsonl",
@@ -470,6 +483,7 @@ func TestParser_ParseTranscriptTimestampsTracked_Good(t *testing.T) {
 	assertEqual(t, expectedEnd, sess.EndTime)
 }
 
+// TestParser_ParseTranscriptTextTruncation_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptTextTruncation_Good(t *testing.T) {
 	dir := t.TempDir()
 	longText := repeatString("x", 600)
@@ -486,6 +500,7 @@ func TestParser_ParseTranscriptTextTruncation_Good(t *testing.T) {
 	assertTrue(t, core.HasSuffix(sess.Events[0].Input, "..."), "truncated text should end with ...")
 }
 
+// TestParser_SessionEventsSeq_Good verifies the behaviour covered by this test case.
 func TestParser_SessionEventsSeq_Good(t *testing.T) {
 	sess := &Session{
 		Events: []Event{
@@ -503,6 +518,7 @@ func TestParser_SessionEventsSeq_Good(t *testing.T) {
 	assertEqual(t, sess.Events, events)
 }
 
+// TestParser_ParseTranscriptMixedContentBlocks_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptMixedContentBlocks_Good(t *testing.T) {
 	// Assistant message with both text and tool_use in the same message
 	dir := t.TempDir()
@@ -541,6 +557,7 @@ func TestParser_ParseTranscriptMixedContentBlocks_Good(t *testing.T) {
 	assertEqual(t, "Read", sess.Events[1].Tool)
 }
 
+// TestParser_ParseTranscriptUnmatchedToolResult_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptUnmatchedToolResult_Bad(t *testing.T) {
 	// A tool_result with no matching tool_use should be silently ignored
 	dir := t.TempDir()
@@ -557,6 +574,7 @@ func TestParser_ParseTranscriptUnmatchedToolResult_Bad(t *testing.T) {
 	assertEqual(t, "user", sess.Events[0].Type)
 }
 
+// TestParser_ParseTranscriptEmptyTimestamp_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptEmptyTimestamp_Bad(t *testing.T) {
 	dir := t.TempDir()
 	// Entry with empty timestamp
@@ -582,6 +600,7 @@ func TestParser_ParseTranscriptEmptyTimestamp_Bad(t *testing.T) {
 
 // --- ListSessions tests ---
 
+// TestParser_ListSessionsEmptyDir_Good verifies the behaviour covered by this test case.
 func TestParser_ListSessionsEmptyDir_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -590,6 +609,7 @@ func TestParser_ListSessionsEmptyDir_Good(t *testing.T) {
 	assertEmpty(t, sessions)
 }
 
+// TestParser_ListSessionsSingleSession_Good verifies the behaviour covered by this test case.
 func TestParser_ListSessionsSingleSession_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "session-abc.jsonl",
@@ -606,6 +626,7 @@ func TestParser_ListSessionsSingleSession_Good(t *testing.T) {
 	assertFalse(t, sessions[0].EndTime.IsZero())
 }
 
+// TestParser_ListSessionsMultipleSorted_Good verifies the behaviour covered by this test case.
 func TestParser_ListSessionsMultipleSorted_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -631,6 +652,7 @@ func TestParser_ListSessionsMultipleSorted_Good(t *testing.T) {
 	assertEqual(t, "old", sessions[2].ID)
 }
 
+// TestParser_ListSessionsNonJSONLIgnored_Good verifies the behaviour covered by this test case.
 func TestParser_ListSessionsNonJSONLIgnored_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -648,6 +670,7 @@ func TestParser_ListSessionsNonJSONLIgnored_Good(t *testing.T) {
 	assertEqual(t, "real-session", sessions[0].ID)
 }
 
+// TestParser_ListSessionsSeqMultipleSorted_Good verifies the behaviour covered by this test case.
 func TestParser_ListSessionsSeqMultipleSorted_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -668,6 +691,7 @@ func TestParser_ListSessionsSeqMultipleSorted_Good(t *testing.T) {
 	assertEqual(t, "old", sessions[2].ID)
 }
 
+// TestParser_ListSessionsMalformedJSONLStillListed_Bad verifies the behaviour covered by this test case.
 func TestParser_ListSessionsMalformedJSONLStillListed_Bad(t *testing.T) {
 	dir := t.TempDir()
 
@@ -687,66 +711,77 @@ func TestParser_ListSessionsMalformedJSONLStillListed_Bad(t *testing.T) {
 
 // --- extractToolInput tests ---
 
+// TestParser_ExtractToolInputBash_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputBash_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"command":"go test ./...","description":"run tests","timeout":120}`))
 	result := extractToolInput("Bash", input)
 	assertEqual(t, "go test ./... # run tests", result)
 }
 
+// TestParser_ExtractToolInputBashNoDescription_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputBashNoDescription_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"command":"ls -la"}`))
 	result := extractToolInput("Bash", input)
 	assertEqual(t, "ls -la", result)
 }
 
+// TestParser_ExtractToolInputRead_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputRead_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"file_path":"/Users/test/main.go","offset":10,"limit":50}`))
 	result := extractToolInput("Read", input)
 	assertEqual(t, "/Users/test/main.go", result)
 }
 
+// TestParser_ExtractToolInputEdit_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputEdit_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"file_path":"/tmp/app.go","old_string":"foo","new_string":"bar"}`))
 	result := extractToolInput("Edit", input)
 	assertEqual(t, "/tmp/app.go (edit)", result)
 }
 
+// TestParser_ExtractToolInputWrite_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputWrite_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"file_path":"/tmp/out.txt","content":"hello world"}`))
 	result := extractToolInput("Write", input)
 	assertEqual(t, "/tmp/out.txt (11 bytes)", result)
 }
 
+// TestParser_ExtractToolInputGrep_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputGrep_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"pattern":"TODO","path":"/src"}`))
 	result := extractToolInput("Grep", input)
 	assertEqual(t, "/TODO/ in /src", result)
 }
 
+// TestParser_ExtractToolInputGrepNoPath_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputGrepNoPath_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"pattern":"FIXME"}`))
 	result := extractToolInput("Grep", input)
 	assertEqual(t, "/FIXME/ in .", result)
 }
 
+// TestParser_ExtractToolInputGlob_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputGlob_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"pattern":"**/*.go","path":"/src"}`))
 	result := extractToolInput("Glob", input)
 	assertEqual(t, "**/*.go", result)
 }
 
+// TestParser_ExtractToolInputTask_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputTask_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"prompt":"Analyse the codebase","description":"Code review","subagent_type":"research"}`))
 	result := extractToolInput("Task", input)
 	assertEqual(t, "[research] Code review", result)
 }
 
+// TestParser_ExtractToolInputTaskNoDescription_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputTaskNoDescription_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"prompt":"Short prompt","subagent_type":"codegen"}`))
 	result := extractToolInput("Task", input)
 	assertEqual(t, "[codegen] Short prompt", result)
 }
 
+// TestParser_ExtractToolInputUnknownTool_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputUnknownTool_Good(t *testing.T) {
 	input := rawJSON([]byte(`{"alpha":"one","beta":"two"}`))
 	result := extractToolInput("CustomTool", input)
@@ -754,11 +789,13 @@ func TestParser_ExtractToolInputUnknownTool_Good(t *testing.T) {
 	assertEqual(t, "alpha, beta", result)
 }
 
+// TestParser_ExtractToolInputNilInput_Bad verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputNilInput_Bad(t *testing.T) {
 	result := extractToolInput("Bash", nil)
 	assertEqual(t, "", result)
 }
 
+// TestParser_ExtractToolInputInvalidJSON_Bad verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputInvalidJSON_Bad(t *testing.T) {
 	input := rawJSON([]byte(`{broken`))
 	result := extractToolInput("Bash", input)
@@ -768,11 +805,13 @@ func TestParser_ExtractToolInputInvalidJSON_Bad(t *testing.T) {
 
 // --- extractResultContent tests ---
 
+// TestParser_ExtractResultContentString_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractResultContentString_Good(t *testing.T) {
 	result := extractResultContent("simple string")
 	assertEqual(t, "simple string", result)
 }
 
+// TestParser_ExtractResultContentArray_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractResultContentArray_Good(t *testing.T) {
 	content := []any{
 		map[string]any{"type": "text", "text": "line one"},
@@ -782,12 +821,14 @@ func TestParser_ExtractResultContentArray_Good(t *testing.T) {
 	assertEqual(t, "line one\nline two", result)
 }
 
+// TestParser_ExtractResultContentMap_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractResultContentMap_Good(t *testing.T) {
 	content := map[string]any{"text": "from map"}
 	result := extractResultContent(content)
 	assertEqual(t, "from map", result)
 }
 
+// TestParser_ExtractResultContentOther_Bad verifies the behaviour covered by this test case.
 func TestParser_ExtractResultContentOther_Bad(t *testing.T) {
 	result := extractResultContent(42)
 	assertEqual(t, "42", result)
@@ -795,31 +836,37 @@ func TestParser_ExtractResultContentOther_Bad(t *testing.T) {
 
 // --- truncate tests ---
 
+// TestParser_TruncateShort_Good verifies the behaviour covered by this test case.
 func TestParser_TruncateShort_Good(t *testing.T) {
 	assertEqual(t, "hello", truncate("hello", 10))
 }
 
+// TestParser_TruncateExact_Good verifies the behaviour covered by this test case.
 func TestParser_TruncateExact_Good(t *testing.T) {
 	assertEqual(t, "hello", truncate("hello", 5))
 }
 
+// TestParser_TruncateLong_Good verifies the behaviour covered by this test case.
 func TestParser_TruncateLong_Good(t *testing.T) {
 	result := truncate("hello world", 5)
 	assertEqual(t, "hello...", result)
 }
 
+// TestParser_TruncateEmpty_Good verifies the behaviour covered by this test case.
 func TestParser_TruncateEmpty_Good(t *testing.T) {
 	assertEqual(t, "", truncate("", 10))
 }
 
 // --- helper function tests ---
 
+// TestParser_ShortIDTruncatesAndPreservesLength_Good verifies the behaviour covered by this test case.
 func TestParser_ShortIDTruncatesAndPreservesLength_Good(t *testing.T) {
 	assertEqual(t, "abcdefgh", shortID("abcdefghijklmnop"))
 	assertEqual(t, "short", shortID("short"))
 	assertEqual(t, "12345678", shortID("12345678"))
 }
 
+// TestParser_FormatDurationCommonDurations_Good verifies the behaviour covered by this test case.
 func TestParser_FormatDurationCommonDurations_Good(t *testing.T) {
 	assertEqual(t, "500ms", formatDuration(500*time.Millisecond))
 	assertEqual(t, "1.5s", formatDuration(1500*time.Millisecond))
@@ -829,6 +876,7 @@ func TestParser_FormatDurationCommonDurations_Good(t *testing.T) {
 
 // --- ParseStats tests ---
 
+// TestParser_ParseStatsCleanJSONL_Good verifies the behaviour covered by this test case.
 func TestParser_ParseStatsCleanJSONL_Good(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "clean.jsonl",
@@ -850,6 +898,7 @@ func TestParser_ParseStatsCleanJSONL_Good(t *testing.T) {
 	assertEmpty(t, stats.Warnings)
 }
 
+// TestParser_ParseStatsMalformedLines_Good verifies the behaviour covered by this test case.
 func TestParser_ParseStatsMalformedLines_Good(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONL(t, dir, "malformed-stats.jsonl",
@@ -874,6 +923,7 @@ func TestParser_ParseStatsMalformedLines_Good(t *testing.T) {
 	}
 }
 
+// TestParser_ParseStatsOrphanedToolCalls_Ugly verifies the behaviour covered by this test case.
 func TestParser_ParseStatsOrphanedToolCalls_Ugly(t *testing.T) {
 	dir := t.TempDir()
 	// Two tool_use entries with no matching tool_result
@@ -903,14 +953,15 @@ func TestParser_ParseStatsOrphanedToolCalls_Ugly(t *testing.T) {
 	assertEqual(t, 2, orphanWarnings)
 }
 
+// TestParser_ParseStatsTruncatedFinalLine_Good verifies the behaviour covered by this test case.
 func TestParser_ParseStatsTruncatedFinalLine_Good(t *testing.T) {
 	dir := t.TempDir()
 	validLine := userTextEntry(ts(0), "Hello")
 	truncatedLine := `{"type":"assi`
 
-	// Write without trailing newline after truncated line
+	// Write without trailing newline after truncated line.
 	path := path.Join(dir, "truncfinal.jsonl")
-	requireTrue(t, hostFS.Write(path, validLine+"\n"+truncatedLine+"\n").OK)
+	requireTrue(t, hostFS.Write(path, validLine+"\n"+truncatedLine).OK)
 
 	_, stats, err := ParseTranscript(path)
 	requireNoError(t, err)
@@ -928,13 +979,14 @@ func TestParser_ParseStatsTruncatedFinalLine_Good(t *testing.T) {
 	assertTrue(t, foundTruncated, "should detect truncated final line")
 }
 
+// TestParser_ParseStatsFileEndingMidJSON_Good verifies the behaviour covered by this test case.
 func TestParser_ParseStatsFileEndingMidJSON_Good(t *testing.T) {
 	dir := t.TempDir()
 	validLine := userTextEntry(ts(0), "Hello")
 	midJSON := `{"type":"assistant","timestamp":"2026-02-20T10:00:01Z","sessionId":"test","message":{"role":"assi`
 
 	path := path.Join(dir, "midjson.jsonl")
-	requireTrue(t, hostFS.Write(path, validLine+"\n"+midJSON+"\n").OK)
+	requireTrue(t, hostFS.Write(path, validLine+"\n"+midJSON).OK)
 
 	sess, stats, err := ParseTranscript(path)
 	requireNoError(t, err)
@@ -952,6 +1004,7 @@ func TestParser_ParseStatsFileEndingMidJSON_Good(t *testing.T) {
 	assertTrue(t, foundTruncated)
 }
 
+// TestParser_ParseStatsCompleteFileNoTrailingNewline_Good verifies the behaviour covered by this test case.
 func TestParser_ParseStatsCompleteFileNoTrailingNewline_Good(t *testing.T) {
 	dir := t.TempDir()
 	line := userTextEntry(ts(0), "Hello")
@@ -979,6 +1032,7 @@ func TestParser_ParseStatsCompleteFileNoTrailingNewline_Good(t *testing.T) {
 	assertFalse(t, foundTruncated)
 }
 
+// TestParser_ParseStatsWarningPreviewTruncated_Good verifies the behaviour covered by this test case.
 func TestParser_ParseStatsWarningPreviewTruncated_Good(t *testing.T) {
 	dir := t.TempDir()
 	// A malformed line longer than 100 chars
@@ -1000,6 +1054,7 @@ func TestParser_ParseStatsWarningPreviewTruncated_Good(t *testing.T) {
 
 // --- ParseTranscriptReader (streaming) tests ---
 
+// TestParser_ParseTranscriptReaderMinimalValid_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptReaderMinimalValid_Good(t *testing.T) {
 	// Parse directly from an in-memory reader.
 	data := core.Join("\n", []string{
@@ -1022,6 +1077,7 @@ func TestParser_ParseTranscriptReaderMinimalValid_Good(t *testing.T) {
 	assertEqual(t, 0, stats.SkippedLines)
 }
 
+// TestParser_ParseTranscriptReaderBytesBuffer_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptReaderBytesBuffer_Good(t *testing.T) {
 	// Parse from a bytes.Buffer (common streaming use case).
 	data := core.Join("\n", []string{
@@ -1040,6 +1096,7 @@ func TestParser_ParseTranscriptReaderBytesBuffer_Good(t *testing.T) {
 	assertTrue(t, sess.Events[0].Success)
 }
 
+// TestParser_ParseTranscriptReaderEmptyReader_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptReaderEmptyReader_Good(t *testing.T) {
 	reader := core.NewReader("")
 
@@ -1050,6 +1107,7 @@ func TestParser_ParseTranscriptReaderEmptyReader_Good(t *testing.T) {
 	assertEqual(t, 0, stats.TotalLines)
 }
 
+// TestParser_ParseTranscriptReaderLargeLines_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptReaderLargeLines_Good(t *testing.T) {
 	// Verify the scanner handles very long lines (> 64KB).
 	longText := repeatString("x", 128*1024) // 128KB of text
@@ -1063,6 +1121,7 @@ func TestParser_ParseTranscriptReaderLargeLines_Good(t *testing.T) {
 	assertLen(t, sess.Events[0].Input, 503) // 500 + "..."
 }
 
+// TestParser_ParseTranscriptReaderMalformedWithStats_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptReaderMalformedWithStats_Good(t *testing.T) {
 	// Malformed lines in a reader should still produce correct stats.
 	data := core.Join("\n", []string{
@@ -1079,6 +1138,7 @@ func TestParser_ParseTranscriptReaderMalformedWithStats_Good(t *testing.T) {
 	assertEqual(t, 2, stats.SkippedLines)
 }
 
+// TestParser_ParseTranscriptReaderOrphanedTools_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptReaderOrphanedTools_Good(t *testing.T) {
 	// Tool calls without results should be tracked in stats.
 	data := core.Join("\n", []string{
@@ -1094,6 +1154,7 @@ func TestParser_ParseTranscriptReaderOrphanedTools_Good(t *testing.T) {
 	assertEqual(t, 1, stats.OrphanedToolCalls)
 }
 
+// TestParser_ParseTranscriptToolUseInputTruncated_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptToolUseInputTruncated_Bad(t *testing.T) {
 	// Pending tool inputs should not retain an entire scanner-sized line.
 	hugeCommand := repeatString("x", 1024*1024)
@@ -1110,6 +1171,7 @@ func TestParser_ParseTranscriptToolUseInputTruncated_Bad(t *testing.T) {
 	assertLen(t, sess.Events[0].Input, 503)
 }
 
+// TestParser_ParseTranscriptPendingToolLimit_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptPendingToolLimit_Bad(t *testing.T) {
 	// Unmatched tool_use entries are attacker-controlled and must be bounded.
 	lines := make([]string, 0, maxPendingToolCalls+1)
@@ -1128,6 +1190,7 @@ func TestParser_ParseTranscriptPendingToolLimit_Bad(t *testing.T) {
 	assertContains(t, core.Join("\n", stats.Warnings...), "pending tool limit reached")
 }
 
+// TestParser_ParseTranscriptDeeplyNestedJSON_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptDeeplyNestedJSON_Bad(t *testing.T) {
 	// Deep malformed JSON should be reported as a skipped line, not panic.
 	deep := repeatString("[", 1200) + repeatString("]", 1200)
@@ -1146,6 +1209,7 @@ func TestParser_ParseTranscriptDeeplyNestedJSON_Bad(t *testing.T) {
 	assertEqual(t, 1, stats.SkippedLines)
 }
 
+// TestParser_ParseTranscriptUnexpectedToolTypes_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptUnexpectedToolTypes_Bad(t *testing.T) {
 	// Unexpected input/content JSON types should not panic type extraction.
 	data := core.Join("\n", []string{
@@ -1160,6 +1224,7 @@ func TestParser_ParseTranscriptUnexpectedToolTypes_Bad(t *testing.T) {
 	assertEqual(t, "42", sess.Events[0].Output)
 }
 
+// TestParser_ParseTranscriptUTF16SurrogateHalf_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptUTF16SurrogateHalf_Bad(t *testing.T) {
 	// Lone UTF-16 surrogate escapes are accepted by encoding/json as replacement runes.
 	data := `{"type":"user","timestamp":"` + ts(0) + `","sessionId":"utf","message":{"role":"user","content":[{"type":"text","text":"bad \ud800 text"}]}}` + "\n"
@@ -1178,6 +1243,7 @@ func TestParser_ParseTranscriptUTF16SurrogateHalf_Bad(t *testing.T) {
 
 // --- Custom MCP tool tests ---
 
+// TestParser_ParseTranscriptCustomMCPTool_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptCustomMCPTool_Good(t *testing.T) {
 	// A tool_use with a non-standard MCP tool name (e.g. mcp__server__tool).
 	dir := t.TempDir()
@@ -1210,6 +1276,7 @@ func TestParser_ParseTranscriptCustomMCPTool_Good(t *testing.T) {
 	assertTrue(t, toolEvents[0].Success)
 }
 
+// TestParser_ParseTranscriptCustomMCPToolNestedInput_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptCustomMCPToolNestedInput_Good(t *testing.T) {
 	// MCP tool with nested JSON input — should show top-level keys.
 	dir := t.TempDir()
@@ -1237,6 +1304,7 @@ func TestParser_ParseTranscriptCustomMCPToolNestedInput_Good(t *testing.T) {
 	assertContains(t, toolEvents[0].Input, "query")
 }
 
+// TestParser_ParseTranscriptUnknownToolEmptyInput_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptUnknownToolEmptyInput_Good(t *testing.T) {
 	// A tool_use with an empty input object.
 	dir := t.TempDir()
@@ -1263,6 +1331,7 @@ func TestParser_ParseTranscriptUnknownToolEmptyInput_Good(t *testing.T) {
 
 // --- Edge case error recovery tests ---
 
+// TestParser_ParseTranscriptBinaryGarbage_Ugly verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptBinaryGarbage_Ugly(t *testing.T) {
 	// Binary garbage interspersed with valid lines — must not panic.
 	dir := t.TempDir()
@@ -1289,6 +1358,7 @@ func TestParser_ParseTranscriptBinaryGarbage_Ugly(t *testing.T) {
 	assertEqual(t, 2, stats.SkippedLines)
 }
 
+// TestParser_ParseTranscriptNullBytes_Ugly verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptNullBytes_Ugly(t *testing.T) {
 	// Lines with embedded null bytes.
 	dir := t.TempDir()
@@ -1303,6 +1373,7 @@ func TestParser_ParseTranscriptNullBytes_Ugly(t *testing.T) {
 	assertLen(t, sess.Events, 1)
 }
 
+// TestParser_ParseTranscriptVeryLongLine_Ugly verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptVeryLongLine_Ugly(t *testing.T) {
 	// A single line that exceeds the default bufio.Scanner buffer.
 	// The parser should handle this without error thanks to the enlarged buffer.
@@ -1317,6 +1388,7 @@ func TestParser_ParseTranscriptVeryLongLine_Ugly(t *testing.T) {
 	requireLen(t, sess.Events, 1)
 }
 
+// TestParser_ParseTranscriptMalformedMessageJSON_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptMalformedMessageJSON_Bad(t *testing.T) {
 	// Valid outer JSON but the message field is not valid message structure.
 	dir := t.TempDir()
@@ -1333,6 +1405,7 @@ func TestParser_ParseTranscriptMalformedMessageJSON_Bad(t *testing.T) {
 	assertEqual(t, "ok", sess.Events[0].Input)
 }
 
+// TestParser_ParseTranscriptMalformedContentBlock_Bad verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptMalformedContentBlock_Bad(t *testing.T) {
 	// Valid message structure but content blocks are malformed.
 	dir := t.TempDir()
@@ -1348,6 +1421,7 @@ func TestParser_ParseTranscriptMalformedContentBlock_Bad(t *testing.T) {
 	assertEqual(t, "still ok", sess.Events[0].Input)
 }
 
+// TestParser_ParseTranscriptTruncatedMissingBrace_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptTruncatedMissingBrace_Good(t *testing.T) {
 	// Final line is missing its closing brace — should be skipped gracefully.
 	dir := t.TempDir()
@@ -1366,6 +1440,7 @@ func TestParser_ParseTranscriptTruncatedMissingBrace_Good(t *testing.T) {
 	assertEqual(t, "also valid", sess.Events[1].Input)
 }
 
+// TestParser_ParseTranscriptTruncatedMidKey_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptTruncatedMidKey_Good(t *testing.T) {
 	// Line truncated in the middle of a JSON key.
 	dir := t.TempDir()
@@ -1381,6 +1456,7 @@ func TestParser_ParseTranscriptTruncatedMidKey_Good(t *testing.T) {
 	assertEqual(t, "first", sess.Events[0].Input)
 }
 
+// TestParser_ParseTranscriptAllBadLines_Good verifies the behaviour covered by this test case.
 func TestParser_ParseTranscriptAllBadLines_Good(t *testing.T) {
 	// Every line is truncated/malformed — result should be empty, no error.
 	dir := t.TempDir()
@@ -1402,6 +1478,7 @@ func TestParser_ParseTranscriptAllBadLines_Good(t *testing.T) {
 
 // --- PruneSessions tests ---
 
+// TestParser_PruneSessionsDeletesOldFiles_Good verifies the behaviour covered by this test case.
 func TestParser_PruneSessionsDeletesOldFiles_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1430,6 +1507,7 @@ func TestParser_PruneSessionsDeletesOldFiles_Good(t *testing.T) {
 	assertEqual(t, "new-session", sessions[0].ID)
 }
 
+// TestParser_PruneSessionsNothingToDelete_Good verifies the behaviour covered by this test case.
 func TestParser_PruneSessionsNothingToDelete_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1442,6 +1520,7 @@ func TestParser_PruneSessionsNothingToDelete_Good(t *testing.T) {
 	assertEqual(t, 0, deleted)
 }
 
+// TestParser_PruneSessionsEmptyDir_Good verifies the behaviour covered by this test case.
 func TestParser_PruneSessionsEmptyDir_Good(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1452,6 +1531,7 @@ func TestParser_PruneSessionsEmptyDir_Good(t *testing.T) {
 
 // --- IsExpired tests ---
 
+// TestParser_IsExpiredRecentSession_Good verifies the behaviour covered by this test case.
 func TestParser_IsExpiredRecentSession_Good(t *testing.T) {
 	sess := &Session{
 		EndTime: time.Now().Add(-5 * time.Minute),
@@ -1459,6 +1539,7 @@ func TestParser_IsExpiredRecentSession_Good(t *testing.T) {
 	assertFalse(t, sess.IsExpired(1*time.Hour))
 }
 
+// TestParser_IsExpiredOldSession_Good verifies the behaviour covered by this test case.
 func TestParser_IsExpiredOldSession_Good(t *testing.T) {
 	sess := &Session{
 		EndTime: time.Now().Add(-2 * time.Hour),
@@ -1466,6 +1547,7 @@ func TestParser_IsExpiredOldSession_Good(t *testing.T) {
 	assertTrue(t, sess.IsExpired(1*time.Hour))
 }
 
+// TestParser_IsExpiredZeroEndTime_Bad verifies the behaviour covered by this test case.
 func TestParser_IsExpiredZeroEndTime_Bad(t *testing.T) {
 	sess := &Session{}
 	assertFalse(t, sess.IsExpired(1*time.Hour))
@@ -1473,6 +1555,7 @@ func TestParser_IsExpiredZeroEndTime_Bad(t *testing.T) {
 
 // --- FetchSession tests ---
 
+// TestParser_FetchSessionValidID_Good verifies the behaviour covered by this test case.
 func TestParser_FetchSessionValidID_Good(t *testing.T) {
 	dir := t.TempDir()
 	writeJSONL(t, dir, "abc123.jsonl",
@@ -1487,6 +1570,7 @@ func TestParser_FetchSessionValidID_Good(t *testing.T) {
 	assertLen(t, sess.Events, 1)
 }
 
+// TestParser_FetchSessionPathTraversal_Ugly verifies the behaviour covered by this test case.
 func TestParser_FetchSessionPathTraversal_Ugly(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1495,6 +1579,7 @@ func TestParser_FetchSessionPathTraversal_Ugly(t *testing.T) {
 	assertContains(t, err.Error(), "invalid session id")
 }
 
+// TestParser_FetchSessionBackslashTraversal_Ugly verifies the behaviour covered by this test case.
 func TestParser_FetchSessionBackslashTraversal_Ugly(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1503,6 +1588,7 @@ func TestParser_FetchSessionBackslashTraversal_Ugly(t *testing.T) {
 	assertContains(t, err.Error(), "invalid session id")
 }
 
+// TestParser_FetchSessionForwardSlash_Ugly verifies the behaviour covered by this test case.
 func TestParser_FetchSessionForwardSlash_Ugly(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1511,6 +1597,7 @@ func TestParser_FetchSessionForwardSlash_Ugly(t *testing.T) {
 	assertContains(t, err.Error(), "invalid session id")
 }
 
+// TestParser_FetchSessionURLEncodedTraversal_Ugly verifies the behaviour covered by this test case.
 func TestParser_FetchSessionURLEncodedTraversal_Ugly(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1519,6 +1606,7 @@ func TestParser_FetchSessionURLEncodedTraversal_Ugly(t *testing.T) {
 	assertNotContains(t, err.Error(), "/etc/passwd")
 }
 
+// TestParser_FetchSessionSymlinkTraversal_Ugly verifies the behaviour covered by this test case.
 func TestParser_FetchSessionSymlinkTraversal_Ugly(t *testing.T) {
 	dir := t.TempDir()
 	outside := t.TempDir()
@@ -1535,6 +1623,7 @@ func TestParser_FetchSessionSymlinkTraversal_Ugly(t *testing.T) {
 	assertContains(t, err.Error(), "invalid session path")
 }
 
+// TestParser_FetchSessionNotFound_Bad verifies the behaviour covered by this test case.
 func TestParser_FetchSessionNotFound_Bad(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1545,6 +1634,7 @@ func TestParser_FetchSessionNotFound_Bad(t *testing.T) {
 
 // --- ListSessions with truncated files ---
 
+// TestParser_ListSessionsTruncatedFile_Good verifies the behaviour covered by this test case.
 func TestParser_ListSessionsTruncatedFile_Good(t *testing.T) {
 	dir := t.TempDir()
 	// A .jsonl file where some lines are truncated — ListSessions should
@@ -1565,6 +1655,19 @@ func TestParser_ListSessionsTruncatedFile_Good(t *testing.T) {
 	assertTrue(t, sessions[0].EndTime.After(sessions[0].StartTime))
 }
 
+// TestParser_ListSessionsOversizedLineSkipped_Ugly verifies the behaviour covered by this test case.
+func TestParser_ListSessionsOversizedLineSkipped_Ugly(t *testing.T) {
+	dir := t.TempDir()
+	filePath := path.Join(dir, "oversized.jsonl")
+	oversizedLine := string(bytes.Repeat([]byte("x"), maxScannerBuffer+1))
+	requireTrue(t, hostFS.Write(filePath, userTextEntry(ts(0), "start")+"\n"+oversizedLine).OK)
+
+	sessions, err := ListSessions(dir)
+	requireNoError(t, err)
+	assertEmpty(t, sessions)
+}
+
+// TestParser_ListSessionsSymlinkTraversal_Ugly verifies the behaviour covered by this test case.
 func TestParser_ListSessionsSymlinkTraversal_Ugly(t *testing.T) {
 	dir := t.TempDir()
 	outside := t.TempDir()

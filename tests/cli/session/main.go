@@ -3,6 +3,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,12 +16,15 @@ const transcript = `{"type":"user","timestamp":"2026-02-20T10:00:00Z","sessionId
 {"type":"assistant","timestamp":"2026-02-20T10:00:03Z","sessionId":"ax10-session","message":{"role":"assistant","content":[{"type":"text","text":"AX-10 complete"}]}}
 `
 
+// main runs the CLI session smoke test.
 func main() {
 	dir, err := os.MkdirTemp("", "go-session-ax10-")
 	requireNoError(err, "create temporary directory")
-	defer os.RemoveAll(dir)
+	defer func() {
+		_ = os.RemoveAll(dir)
+	}()
 
-	transcriptPath := dir + "/ax10-session.jsonl"
+	transcriptPath := filepath.Join(dir, "ax10-session.jsonl")
 	requireNoError(os.WriteFile(transcriptPath, []byte(transcript), 0o600), "write transcript")
 
 	sess, stats, err := session.ParseTranscript(transcriptPath)
@@ -37,13 +41,15 @@ func main() {
 	require(tool.Tool == "Bash", "expected Bash tool call")
 	require(tool.Input == "echo ax10 # smoke test", "expected Bash input to include command and description")
 	require(tool.Output == "ax10\n", "expected Bash output to be preserved")
-	require(tool.Duration == time.Second, "expected one second tool duration")
+	expectedDuration := time.Second
+	require(tool.Duration == expectedDuration, "expected tool duration to match transcript timestamps")
 	require(tool.Success, "expected successful tool call")
 
 	analytics := session.Analyse(sess)
 	require(analytics.EventCount == 3, "expected analytics event count")
 	require(analytics.ToolCounts["Bash"] == 1, "expected analytics Bash count")
-	require(analytics.SuccessRate == 1, "expected analytics success rate")
+	expectedSuccessRate := successfulToolRate(sess)
+	require(analytics.SuccessRate == expectedSuccessRate, "expected analytics success rate")
 	require(strings.Contains(session.FormatAnalytics(analytics), "Bash"), "expected formatted analytics to include Bash")
 
 	results, err := session.Search(dir, "ax10")
@@ -60,7 +66,7 @@ func main() {
 	requireNoError(err, "fetch session")
 	require(fetched.ID == sess.ID, "expected fetched session to match parsed session")
 
-	htmlPath := dir + "/timeline.html"
+	htmlPath := filepath.Join(dir, "timeline.html")
 	requireNoError(session.RenderHTML(sess, htmlPath), "render HTML")
 	htmlBytes, err := os.ReadFile(htmlPath)
 	requireNoError(err, "read rendered HTML")
@@ -69,12 +75,32 @@ func main() {
 	require(strings.Contains(html, "echo ax10"), "expected rendered HTML tool input")
 }
 
+// successfulToolRate calculates the same tool-call success ratio as session.Analyse.
+func successfulToolRate(sess *session.Session) float64 {
+	var successful, total int
+	for _, evt := range sess.Events {
+		if evt.Type != "tool_use" {
+			continue
+		}
+		total++
+		if evt.Success {
+			successful++
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return float64(successful) / float64(total)
+}
+
+// require stops the current test case when its condition is not met.
 func require(ok bool, msg string) {
 	if !ok {
 		panic(msg)
 	}
 }
 
+// requireNoError stops the current test case when its condition is not met.
 func requireNoError(err error, msg string) {
 	if err != nil {
 		panic(msg + ": " + err.Error())
