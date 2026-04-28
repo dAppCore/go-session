@@ -2,9 +2,9 @@
 package session
 
 import (
-	"maps"
-	"slices"
-	"time"
+	"maps"   // Note: intrinsic — maps.Keys exposes tool names for deterministic analytics output; no core equivalent
+	"slices" // Note: intrinsic — slices.Sorted orders analytics rows deterministically; no core equivalent
+	"time"   // Note: intrinsic — time.Duration arithmetic for session, active-time, and latency metrics; no core equivalent
 
 	core "dappco.re/go/core"
 )

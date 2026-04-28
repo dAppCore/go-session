@@ -4,11 +4,9 @@ package session
 import (
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
+// TestAnalytics_AnalyseEmptySession_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseEmptySession_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "empty",
@@ -18,24 +16,26 @@ func TestAnalytics_AnalyseEmptySession_Good(t *testing.T) {
 	}
 
 	a := Analyse(sess)
-	require.NotNil(t, a)
+	requireNotNil(t, a)
 
-	assert.Equal(t, time.Duration(0), a.Duration)
-	assert.Equal(t, time.Duration(0), a.ActiveTime)
-	assert.Equal(t, 0, a.EventCount)
-	assert.Equal(t, 0.0, a.SuccessRate)
-	assert.Empty(t, a.ToolCounts)
-	assert.Empty(t, a.ErrorCounts)
-	assert.Equal(t, 0, a.EstimatedInputTokens)
-	assert.Equal(t, 0, a.EstimatedOutputTokens)
+	assertEqual(t, time.Duration(0), a.Duration)
+	assertEqual(t, time.Duration(0), a.ActiveTime)
+	assertEqual(t, 0, a.EventCount)
+	assertEqual(t, 0.0, a.SuccessRate)
+	assertEmpty(t, a.ToolCounts)
+	assertEmpty(t, a.ErrorCounts)
+	assertEqual(t, 0, a.EstimatedInputTokens)
+	assertEqual(t, 0, a.EstimatedOutputTokens)
 }
 
+// TestAnalytics_AnalyseNilSession_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseNilSession_Good(t *testing.T) {
 	a := Analyse(nil)
-	require.NotNil(t, a)
-	assert.Equal(t, 0, a.EventCount)
+	requireNotNil(t, a)
+	assertEqual(t, 0, a.EventCount)
 }
 
+// TestAnalytics_AnalyseSingleToolCall_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseSingleToolCall_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "single",
@@ -56,16 +56,17 @@ func TestAnalytics_AnalyseSingleToolCall_Good(t *testing.T) {
 
 	a := Analyse(sess)
 
-	assert.Equal(t, 5*time.Second, a.Duration)
-	assert.Equal(t, 2*time.Second, a.ActiveTime)
-	assert.Equal(t, 1, a.EventCount)
-	assert.Equal(t, 1.0, a.SuccessRate)
-	assert.Equal(t, 1, a.ToolCounts["Bash"])
-	assert.Equal(t, 0, a.ErrorCounts["Bash"])
-	assert.Equal(t, 2*time.Second, a.AvgLatency["Bash"])
-	assert.Equal(t, 2*time.Second, a.MaxLatency["Bash"])
+	assertEqual(t, 5*time.Second, a.Duration)
+	assertEqual(t, 2*time.Second, a.ActiveTime)
+	assertEqual(t, 1, a.EventCount)
+	assertEqual(t, 1.0, a.SuccessRate)
+	assertEqual(t, 1, a.ToolCounts["Bash"])
+	assertEqual(t, 0, a.ErrorCounts["Bash"])
+	assertEqual(t, 2*time.Second, a.AvgLatency["Bash"])
+	assertEqual(t, 2*time.Second, a.MaxLatency["Bash"])
 }
 
+// TestAnalytics_AnalyseMixedToolsWithErrors_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseMixedToolsWithErrors_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "mixed",
@@ -127,26 +128,27 @@ func TestAnalytics_AnalyseMixedToolsWithErrors_Good(t *testing.T) {
 
 	a := Analyse(sess)
 
-	assert.Equal(t, 5*time.Minute, a.Duration)
-	assert.Equal(t, 7, a.EventCount)
+	assertEqual(t, 5*time.Minute, a.Duration)
+	assertEqual(t, 7, a.EventCount)
 
 	// Tool counts
-	assert.Equal(t, 2, a.ToolCounts["Bash"])
-	assert.Equal(t, 2, a.ToolCounts["Read"])
-	assert.Equal(t, 1, a.ToolCounts["Edit"])
+	assertEqual(t, 2, a.ToolCounts["Bash"])
+	assertEqual(t, 2, a.ToolCounts["Read"])
+	assertEqual(t, 1, a.ToolCounts["Edit"])
 
 	// Error counts
-	assert.Equal(t, 1, a.ErrorCounts["Bash"])
-	assert.Equal(t, 1, a.ErrorCounts["Read"])
-	assert.Equal(t, 0, a.ErrorCounts["Edit"])
+	assertEqual(t, 1, a.ErrorCounts["Bash"])
+	assertEqual(t, 1, a.ErrorCounts["Read"])
+	assertEqual(t, 0, a.ErrorCounts["Edit"])
 
 	// Success rate: 3 successes out of 5 tool calls = 0.6
-	assert.InDelta(t, 0.6, a.SuccessRate, 0.001)
+	assertInDelta(t, 0.6, a.SuccessRate, 0.001)
 
 	// Active time: 1s + 500ms + 200ms + 100ms + 300ms = 2.1s
-	assert.Equal(t, 2100*time.Millisecond, a.ActiveTime)
+	assertEqual(t, 2100*time.Millisecond, a.ActiveTime)
 }
 
+// TestAnalytics_AnalyseLatencyCalculations_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseLatencyCalculations_Good(t *testing.T) {
 	sess := &Session{
 		ID:        "latency",
@@ -183,14 +185,15 @@ func TestAnalytics_AnalyseLatencyCalculations_Good(t *testing.T) {
 	a := Analyse(sess)
 
 	// Bash: avg = (1+3+5)/3 = 3s, max = 5s
-	assert.Equal(t, 3*time.Second, a.AvgLatency["Bash"])
-	assert.Equal(t, 5*time.Second, a.MaxLatency["Bash"])
+	assertEqual(t, 3*time.Second, a.AvgLatency["Bash"])
+	assertEqual(t, 5*time.Second, a.MaxLatency["Bash"])
 
 	// Read: avg = 200ms, max = 200ms
-	assert.Equal(t, 200*time.Millisecond, a.AvgLatency["Read"])
-	assert.Equal(t, 200*time.Millisecond, a.MaxLatency["Read"])
+	assertEqual(t, 200*time.Millisecond, a.AvgLatency["Read"])
+	assertEqual(t, 200*time.Millisecond, a.MaxLatency["Read"])
 }
 
+// TestAnalytics_AnalyseTokenEstimation_Good verifies the behaviour covered by this test case.
 func TestAnalytics_AnalyseTokenEstimation_Good(t *testing.T) {
 	// 4 chars = ~1 token
 	sess := &Session{
@@ -220,11 +223,12 @@ func TestAnalytics_AnalyseTokenEstimation_Good(t *testing.T) {
 	a := Analyse(sess)
 
 	// Input tokens: 400/4 + 80/4 + 120/4 = 100 + 20 + 30 = 150
-	assert.Equal(t, 150, a.EstimatedInputTokens)
+	assertEqual(t, 150, a.EstimatedInputTokens)
 	// Output tokens: 0 + 200/4 + 0 = 50
-	assert.Equal(t, 50, a.EstimatedOutputTokens)
+	assertEqual(t, 50, a.EstimatedOutputTokens)
 }
 
+// TestAnalytics_FormatAnalyticsOutput_Good verifies the behaviour covered by this test case.
 func TestAnalytics_FormatAnalyticsOutput_Good(t *testing.T) {
 	a := &SessionAnalytics{
 		Duration:              5 * time.Minute,
@@ -255,19 +259,20 @@ func TestAnalytics_FormatAnalyticsOutput_Good(t *testing.T) {
 
 	output := FormatAnalytics(a)
 
-	assert.Contains(t, output, "Session Analytics")
-	assert.Contains(t, output, "5m0s")
-	assert.Contains(t, output, "2m0s")
-	assert.Contains(t, output, "42")
-	assert.Contains(t, output, "85.0%")
-	assert.Contains(t, output, "1500")
-	assert.Contains(t, output, "3000")
-	assert.Contains(t, output, "Bash")
-	assert.Contains(t, output, "Read")
-	assert.Contains(t, output, "Edit")
-	assert.Contains(t, output, "Tool Breakdown")
+	assertContains(t, output, "Session Analytics")
+	assertContains(t, output, "5m0s")
+	assertContains(t, output, "2m0s")
+	assertContains(t, output, "42")
+	assertContains(t, output, "85.0%")
+	assertContains(t, output, "1500")
+	assertContains(t, output, "3000")
+	assertContains(t, output, "Bash")
+	assertContains(t, output, "Read")
+	assertContains(t, output, "Edit")
+	assertContains(t, output, "Tool Breakdown")
 }
 
+// TestAnalytics_FormatAnalyticsEmptyAnalytics_Good verifies the behaviour covered by this test case.
 func TestAnalytics_FormatAnalyticsEmptyAnalytics_Good(t *testing.T) {
 	a := &SessionAnalytics{
 		ToolCounts:  make(map[string]int),
@@ -278,8 +283,8 @@ func TestAnalytics_FormatAnalyticsEmptyAnalytics_Good(t *testing.T) {
 
 	output := FormatAnalytics(a)
 
-	assert.Contains(t, output, "Session Analytics")
-	assert.Contains(t, output, "0.0%")
+	assertContains(t, output, "Session Analytics")
+	assertContains(t, output, "0.0%")
 	// No tool breakdown section when no tools
-	assert.NotContains(t, output, "Tool Breakdown")
+	assertNotContains(t, output, "Tool Breakdown")
 }

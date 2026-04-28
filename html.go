@@ -2,9 +2,9 @@
 package session
 
 import (
-	"html"
-	"path"
-	"time"
+	"html" // Note: intrinsic — escaping transcript content for generated HTML; stdlib encoder is the output contract
+	"path" // Note: intrinsic — output parent directory derivation for slash-separated paths; no core equivalent
+	"time" // Note: intrinsic — duration formatting thresholds for rendered summaries; no core equivalent
 
 	core "dappco.re/go/core"
 )
@@ -122,9 +122,10 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 	var i int
 	for evt := range sess.EventsSeq() {
 		toolClass := core.Lower(evt.Tool)
-		if evt.Type == "user" {
+		switch evt.Type {
+		case "user":
 			toolClass = "user"
-		} else if evt.Type == "assistant" {
+		case "assistant":
 			toolClass = "assistant"
 		}
 
@@ -143,9 +144,10 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 		}
 
 		toolLabel := evt.Tool
-		if evt.Type == "user" {
+		switch evt.Type {
+		case "user":
 			toolLabel = "User"
-		} else if evt.Type == "assistant" {
+		case "assistant":
 			toolLabel = "Claude"
 		}
 
@@ -182,13 +184,14 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font); font-s
 
 		if evt.Input != "" {
 			label := "Command"
-			if evt.Type == "user" {
+			switch {
+			case evt.Type == "user":
 				label = "Message"
-			} else if evt.Type == "assistant" {
+			case evt.Type == "assistant":
 				label = "Response"
-			} else if evt.Tool == "Read" || evt.Tool == "Glob" || evt.Tool == "Grep" {
+			case evt.Tool == "Read" || evt.Tool == "Glob" || evt.Tool == "Grep":
 				label = "Target"
-			} else if evt.Tool == "Edit" || evt.Tool == "Write" {
+			case evt.Tool == "Edit" || evt.Tool == "Write":
 				label = "File"
 			}
 			b.WriteString(core.Sprintf(`    <div class="section"><div class="label">%s</div><pre>%s</pre></div>
@@ -260,6 +263,7 @@ document.addEventListener('DOMContentLoaded', openHashEvent);
 	return nil
 }
 
+// shortID returns the abbreviated identifier used by rendered summaries.
 func shortID(id string) string {
 	if len(id) > 8 {
 		return id[:8]
@@ -267,6 +271,7 @@ func shortID(id string) string {
 	return id
 }
 
+// formatDuration formats a duration for compact timeline and analytics output.
 func formatDuration(d time.Duration) string {
 	if d < time.Second {
 		return core.Sprintf("%dms", d.Milliseconds())

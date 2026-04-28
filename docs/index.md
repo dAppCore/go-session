@@ -7,14 +7,14 @@ description: Claude Code JSONL transcript parser, analytics engine, and HTML tim
 
 `go-session` parses Claude Code JSONL session transcripts into structured event arrays, computes per-tool analytics, renders self-contained HTML timelines with client-side search, and generates VHS tape scripts for MP4 video output. It has no external runtime dependencies -- stdlib only.
 
-**Module path:** `dappco.re/go/core/session`
+**Module path:** `dappco.re/go/session`
 **Go version:** 1.26
 **Licence:** EUPL-1.2
 
 ## Quick Start
 
 ```go
-import "dappco.re/go/core/session"
+import "dappco.re/go/session"
 
 // Parse a single session file
 sess, stats, err := session.ParseTranscript("/path/to/session.jsonl")
@@ -58,10 +58,9 @@ Test files mirror the source files (`parser_test.go`, `analytics_test.go`, `html
 | Dependency | Scope | Purpose |
 |------------|-------|---------|
 | Go standard library | Runtime | All parsing, HTML rendering, file I/O, JSON decoding |
-| `github.com/stretchr/testify` | Test only | Assertions and requirements in test files |
 | `vhs` (charmbracelet) | Optional external binary | Required only by `RenderMP4` for MP4 video generation |
 
-The package has **zero runtime dependencies** beyond the Go standard library. `testify` is fetched automatically by `go test` and is never imported outside test files.
+The package has **zero runtime dependencies** beyond the Go standard library and uses local stdlib-backed test helpers instead of third-party assertion packages.
 
 ## Supported Tool Types
 

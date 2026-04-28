@@ -6,10 +6,9 @@ import (
 	"time"
 
 	core "dappco.re/go/core"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
+// TestHTML_RenderHTMLBasicSession_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLBasicSession_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/output.html"
@@ -54,32 +53,33 @@ func TestHTML_RenderHTMLBasicSession_Good(t *testing.T) {
 	}
 
 	err := RenderHTML(sess, outputPath)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	readResult := hostFS.Read(outputPath)
-	require.True(t, readResult.OK)
+	requireTrue(t, readResult.OK)
 	html := readResult.Value.(string)
 
 	// Basic structure checks
-	assert.Contains(t, html, "<!DOCTYPE html>")
-	assert.Contains(t, html, "test-ses") // shortID of "test-session-12345678"
-	assert.Contains(t, html, "2026-02-20 10:00:00")
-	assert.Contains(t, html, "5m30s") // duration
-	assert.Contains(t, html, "2 tool calls")
-	assert.Contains(t, html, "ls -la")
-	assert.Contains(t, html, "total 42")
-	assert.Contains(t, html, "/tmp/file.go")
-	assert.Contains(t, html, "User")   // user event label
-	assert.Contains(t, html, "Claude") // assistant event label
-	assert.Contains(t, html, "Bash")
-	assert.Contains(t, html, "Read")
-	assert.Contains(t, html, `href="#evt-0"`)
-	assert.Contains(t, html, "openHashEvent")
+	assertContains(t, html, "<!DOCTYPE html>")
+	assertContains(t, html, "test-ses") // shortID of "test-session-12345678"
+	assertContains(t, html, "2026-02-20 10:00:00")
+	assertContains(t, html, "5m30s") // duration
+	assertContains(t, html, "2 tool calls")
+	assertContains(t, html, "ls -la")
+	assertContains(t, html, "total 42")
+	assertContains(t, html, "/tmp/file.go")
+	assertContains(t, html, "User")   // user event label
+	assertContains(t, html, "Claude") // assistant event label
+	assertContains(t, html, "Bash")
+	assertContains(t, html, "Read")
+	assertContains(t, html, `href="#evt-0"`)
+	assertContains(t, html, "openHashEvent")
 	// Should contain JS for toggle and filter
-	assert.Contains(t, html, "function toggle")
-	assert.Contains(t, html, "function filterEvents")
+	assertContains(t, html, "function toggle")
+	assertContains(t, html, "function filterEvents")
 }
 
+// TestHTML_RenderHTMLEmptySession_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLEmptySession_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/empty.html"
@@ -93,17 +93,18 @@ func TestHTML_RenderHTMLEmptySession_Good(t *testing.T) {
 	}
 
 	err := RenderHTML(sess, outputPath)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	readResult := hostFS.Read(outputPath)
-	require.True(t, readResult.OK)
+	requireTrue(t, readResult.OK)
 	html := readResult.Value.(string)
-	assert.Contains(t, html, "<!DOCTYPE html>")
-	assert.Contains(t, html, "0 tool calls")
+	assertContains(t, html, "<!DOCTYPE html>")
+	assertContains(t, html, "0 tool calls")
 	// Should NOT contain error span
-	assert.NotContains(t, html, "errors</span>")
+	assertNotContains(t, html, "errors</span>")
 }
 
+// TestHTML_RenderHTMLWithErrors_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLWithErrors_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/errors.html"
@@ -137,17 +138,18 @@ func TestHTML_RenderHTMLWithErrors_Good(t *testing.T) {
 	}
 
 	err := RenderHTML(sess, outputPath)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	readResult := hostFS.Read(outputPath)
-	require.True(t, readResult.OK)
+	requireTrue(t, readResult.OK)
 	html := readResult.Value.(string)
-	assert.Contains(t, html, "1 errors")
-	assert.Contains(t, html, `class="event error"`)
-	assert.Contains(t, html, "&#10007;") // cross mark for failed
-	assert.Contains(t, html, "&#10003;") // check mark for success
+	assertContains(t, html, "1 errors")
+	assertContains(t, html, `class="event error"`)
+	assertContains(t, html, "&#10007;") // cross mark for failed
+	assertContains(t, html, "&#10003;") // check mark for success
 }
 
+// TestHTML_RenderHTMLSpecialCharacters_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLSpecialCharacters_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/special.html"
@@ -176,18 +178,19 @@ func TestHTML_RenderHTMLSpecialCharacters_Good(t *testing.T) {
 	}
 
 	err := RenderHTML(sess, outputPath)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	readResult := hostFS.Read(outputPath)
-	require.True(t, readResult.OK)
+	requireTrue(t, readResult.OK)
 	html := readResult.Value.(string)
 
 	// Script tags should be escaped, never raw
-	assert.NotContains(t, html, "<script>alert")
-	assert.Contains(t, html, "&lt;script&gt;")
-	assert.Contains(t, html, "&amp;")
+	assertNotContains(t, html, "<script>alert")
+	assertContains(t, html, "&lt;script&gt;")
+	assertContains(t, html, "&amp;")
 }
 
+// TestHTML_RenderHTMLInvalidPath_Ugly verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLInvalidPath_Ugly(t *testing.T) {
 	sess := &Session{
 		ID:     "test",
@@ -195,10 +198,11 @@ func TestHTML_RenderHTMLInvalidPath_Ugly(t *testing.T) {
 	}
 
 	err := RenderHTML(sess, "/nonexistent/dir/output.html")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parent directory does not exist")
+	requireError(t, err)
+	assertContains(t, err.Error(), "parent directory does not exist")
 }
 
+// TestHTML_RenderHTMLLabelsByToolType_Good verifies the behaviour covered by this test case.
 func TestHTML_RenderHTMLLabelsByToolType_Good(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := dir + "/labels.html"
@@ -219,16 +223,16 @@ func TestHTML_RenderHTMLLabelsByToolType_Good(t *testing.T) {
 	}
 
 	err := RenderHTML(sess, outputPath)
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	readResult := hostFS.Read(outputPath)
-	require.True(t, readResult.OK)
+	requireTrue(t, readResult.OK)
 	html := readResult.Value.(string)
 
 	// Bash gets "Command" label
-	assert.True(t, core.Contains(html, "Command"), "Bash events should use 'Command' label")
+	assertTrue(t, core.Contains(html, "Command"), "Bash events should use 'Command' label")
 	// Read, Glob, Grep get "Target" label
-	assert.True(t, core.Contains(html, "Target"), "Read/Glob/Grep events should use 'Target' label")
+	assertTrue(t, core.Contains(html, "Target"), "Read/Glob/Grep events should use 'Target' label")
 	// Edit, Write get "File" label
-	assert.True(t, core.Contains(html, "File"), "Edit/Write events should use 'File' label")
+	assertTrue(t, core.Contains(html, "File"), "Edit/Write events should use 'File' label")
 }

@@ -2,21 +2,22 @@
 package session
 
 import (
-	"bufio"
-	"io"
-	"io/fs"
-	"iter"
-	"maps"
-	"path"
-	"slices"
-	"time"
+	"io"     // Note: intrinsic — Reader, ReadCloser, and EOF contracts for transcript streams and hostFS handles; no core equivalent
+	"io/fs"  // Note: intrinsic — fs.FileInfo metadata returned from hostFS.Stat; no core equivalent
+	"iter"   // Note: intrinsic — public lazy sequence API for sessions and events; no core equivalent
+	"slices" // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
+	"time"   // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
 
 	core "dappco.re/go/core"
+	coreerr "dappco.re/go/core/log"
 )
 
 // maxScannerBuffer is the maximum line length the scanner will accept.
 // Set to 8 MiB to handle very large tool outputs without truncation.
 const maxScannerBuffer = 8 * 1024 * 1024
+
+// maxPendingToolCalls bounds unmatched tool_use entries retained while parsing.
+const maxPendingToolCalls = 4096
 
 // Event represents a single action in a session timeline.
 //
@@ -149,19 +150,18 @@ func ListSessions(projectsDir string) ([]Session, error) {
 //	}
 func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 	return func(yield func(Session) bool) {
-		matches := core.PathGlob(path.Join(projectsDir, "*.jsonl"))
+		const op = "ListSessionsSeq"
+
+		matches := core.PathGlob(transcriptPath(projectsDir, "*.jsonl"))
 
 		var sessions []Session
 		for _, filePath := range matches {
-			base := path.Base(filePath)
+			base := core.PathBase(filePath)
 			id := core.TrimSuffix(base, ".jsonl")
 
-			infoResult := hostFS.Stat(filePath)
-			if !infoResult.OK {
-				continue
-			}
-			info, ok := infoResult.Value.(fs.FileInfo)
-			if !ok {
+			f, err := openTranscriptNoFollow(filePath)
+			if err != nil {
+				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", err)
 				continue
 			}
 
@@ -171,32 +171,30 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 			}
 
 			// Quick scan for first and last timestamps
-			openResult := hostFS.Open(filePath)
-			if !openResult.OK {
-				continue
-			}
-			f, ok := openResult.Value.(io.ReadCloser)
-			if !ok {
-				continue
-			}
-
-			scanner := bufio.NewScanner(f)
-			scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 			var firstTS, lastTS string
-			for scanner.Scan() {
+			scanErr := scanTranscriptLines(f, maxScannerBuffer, func(line []byte) bool {
 				var entry rawEntry
-				if !core.JSONUnmarshal(scanner.Bytes(), &entry).OK {
-					continue
+				if !core.JSONUnmarshal(line, &entry).OK {
+					return true
 				}
 				if entry.Timestamp == "" {
-					continue
+					return true
 				}
 				if firstTS == "" {
 					firstTS = entry.Timestamp
 				}
 				lastTS = entry.Timestamp
+				return true
+			})
+			closeErr := f.Close()
+			if scanErr != nil {
+				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", scanErr)
+				continue
 			}
-			f.Close()
+			if closeErr != nil {
+				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", closeErr)
+				continue
+			}
 
 			if firstTS != "" {
 				if t, err := time.Parse(time.RFC3339Nano, firstTS); err == nil {
@@ -209,7 +207,12 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 				}
 			}
 			if s.StartTime.IsZero() {
-				s.StartTime = info.ModTime()
+				infoResult := hostFS.Stat(filePath)
+				if infoResult.OK {
+					if info, ok := infoResult.Value.(fs.FileInfo); ok {
+						s.StartTime = info.ModTime()
+					}
+				}
 			}
 
 			sessions = append(sessions, s)
@@ -233,7 +236,7 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 // Example:
 // deleted, err := session.PruneSessions("/tmp/projects", 24*time.Hour)
 func PruneSessions(projectsDir string, maxAge time.Duration) (int, error) {
-	matches := core.PathGlob(path.Join(projectsDir, "*.jsonl"))
+	matches := core.PathGlob(transcriptPath(projectsDir, "*.jsonl"))
 
 	var deleted int
 	now := time.Now()
@@ -275,11 +278,21 @@ func (s *Session) IsExpired(maxAge time.Duration) bool {
 // sess, stats, err := session.FetchSession("/tmp/projects", "abc123")
 func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 	if core.Contains(id, "..") || containsAny(id, `/\`) {
-		return nil, nil, core.E("FetchSession", "invalid session id", nil)
+		return nil, nil, coreerr.E("FetchSession", "invalid session id", nil)
 	}
 
-	filePath := path.Join(projectsDir, id+".jsonl")
-	return ParseTranscript(filePath)
+	filePath := transcriptPath(projectsDir, id+".jsonl")
+	f, err := openTranscriptNoFollow(filePath)
+	if err != nil {
+		if isTranscriptMissing(err) {
+			return nil, nil, coreerr.E("FetchSession", "open transcript", err)
+		}
+		return nil, nil, coreerr.E("FetchSession", "invalid session path", err)
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+	return parseTranscriptFile(filePath, f)
 }
 
 // ParseTranscript reads a JSONL session file and returns structured events.
@@ -290,23 +303,30 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 	openResult := hostFS.Open(filePath)
 	if !openResult.OK {
-		return nil, nil, core.E("ParseTranscript", "open transcript", resultError(openResult))
+		return nil, nil, coreerr.E("ParseTranscript", "open transcript", resultError(openResult))
 	}
 	f, ok := openResult.Value.(io.ReadCloser)
 	if !ok {
-		return nil, nil, core.E("ParseTranscript", "unexpected file handle type", nil)
+		return nil, nil, coreerr.E("ParseTranscript", "unexpected file handle type", nil)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
-	base := path.Base(filePath)
+	return parseTranscriptFile(filePath, f)
+}
+
+// parseTranscriptFile parses an already-open transcript reader and assigns path metadata.
+func parseTranscriptFile(filePath string, r io.Reader) (*Session, *ParseStats, error) {
+	base := core.PathBase(filePath)
 	id := core.TrimSuffix(base, ".jsonl")
 
-	sess, stats, err := parseFromReader(f, id)
+	sess, stats, err := parseFromReader(r, id)
 	if sess != nil {
 		sess.Path = filePath
 	}
 	if err != nil {
-		return sess, stats, core.E("ParseTranscript", "parse transcript", err)
+		return sess, stats, coreerr.E("ParseTranscript", "parse transcript", err)
 	}
 	return sess, stats, nil
 }
@@ -320,14 +340,14 @@ func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 func ParseTranscriptReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	sess, stats, err := parseFromReader(r, id)
 	if err != nil {
-		return sess, stats, core.E("ParseTranscriptReader", "parse transcript", err)
+		return sess, stats, coreerr.E("ParseTranscriptReader", "parse transcript", err)
 	}
 	return sess, stats, nil
 }
 
 // parseFromReader is the shared implementation for both file-based and
-// reader-based parsing. It scans line-by-line using bufio.Scanner with
-// an 8 MiB buffer, gracefully skipping malformed lines.
+// reader-based parsing. It scans line-by-line with an 8 MiB buffer,
+// gracefully skipping malformed lines.
 func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	sess := &Session{
 		ID: id,
@@ -343,20 +363,17 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	}
 	pendingTools := make(map[string]toolUse)
 
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, maxScannerBuffer), maxScannerBuffer)
-
 	var lineNum int
 	var lastRaw string
 	var lastLineFailed bool
 
-	for scanner.Scan() {
+	scanErr := scanTranscriptLines(r, maxScannerBuffer, func(line []byte) bool {
 		lineNum++
 		stats.TotalLines++
 
-		raw := scanner.Text()
+		raw := string(line)
 		if core.Trim(raw) == "" {
-			continue
+			return true
 		}
 
 		lastRaw = raw
@@ -372,13 +389,13 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 			stats.Warnings = append(stats.Warnings,
 				core.Sprintf("line %d: skipped (bad JSON): %s", lineNum, preview))
 			lastLineFailed = true
-			continue
+			return true
 		}
 
 		ts, err := time.Parse(time.RFC3339Nano, entry.Timestamp)
 		if err != nil {
 			stats.Warnings = append(stats.Warnings, core.Sprintf("line %d: bad timestamp %q: %v", lineNum, entry.Timestamp, err))
-			continue
+			return true
 		}
 
 		if sess.StartTime.IsZero() && !ts.IsZero() {
@@ -393,7 +410,7 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 			var msg rawMessage
 			if !core.JSONUnmarshal(entry.Message, &msg).OK {
 				stats.Warnings = append(stats.Warnings, core.Sprintf("line %d: failed to unmarshal assistant message", lineNum))
-				continue
+				return true
 			}
 			for i, raw := range msg.Content {
 				var block contentBlock
@@ -413,11 +430,19 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 					}
 
 				case "tool_use":
+					if block.ID == "" {
+						continue
+					}
+					if _, exists := pendingTools[block.ID]; !exists && len(pendingTools) >= maxPendingToolCalls {
+						stats.Warnings = append(stats.Warnings,
+							core.Sprintf("line %d: skipped tool_use %q (pending tool limit reached)", lineNum, block.ID))
+						continue
+					}
 					inputStr := extractToolInput(block.Name, block.Input)
 					pendingTools[block.ID] = toolUse{
 						timestamp: ts,
 						tool:      block.Name,
-						input:     inputStr,
+						input:     truncate(inputStr, 500),
 					}
 				}
 			}
@@ -426,7 +451,7 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 			var msg rawMessage
 			if !core.JSONUnmarshal(entry.Message, &msg).OK {
 				stats.Warnings = append(stats.Warnings, core.Sprintf("line %d: failed to unmarshal user message", lineNum))
-				continue
+				return true
 			}
 			for i, raw := range msg.Content {
 				var block contentBlock
@@ -468,15 +493,15 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 				}
 			}
 		}
-	}
+		return true
+	})
 
 	// Detect truncated final line.
 	if lastLineFailed && lastRaw != "" {
 		stats.Warnings = append(stats.Warnings, "truncated final line")
 	}
 
-	// Check for scanner buffer errors.
-	if scanErr := scanner.Err(); scanErr != nil {
+	if scanErr != nil {
 		return nil, stats, scanErr
 	}
 
@@ -492,6 +517,7 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	return sess, stats, nil
 }
 
+// extractToolInput converts raw Claude tool input into a concise display string.
 func extractToolInput(toolName string, raw rawJSON) string {
 	if raw == nil {
 		return ""
@@ -550,13 +576,18 @@ func extractToolInput(toolName string, raw rawJSON) string {
 	// Fallback: show raw JSON keys
 	var m map[string]any
 	if core.JSONUnmarshal(raw, &m).OK {
-		parts := slices.Sorted(maps.Keys(m))
+		parts := make([]string, 0, len(m))
+		for key := range m {
+			parts = append(parts, key)
+		}
+		slices.Sort(parts)
 		return core.Join(", ", parts...)
 	}
 
 	return ""
 }
 
+// extractResultContent converts Claude tool_result content into plain text.
 func extractResultContent(content any) string {
 	switch v := content.(type) {
 	case string:
@@ -579,9 +610,78 @@ func extractResultContent(content any) string {
 	return core.Sprint(content)
 }
 
+// truncate returns s capped to max bytes with an ellipsis marker.
 func truncate(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
 	return s[:max] + "..."
+}
+
+// scanTranscriptLines streams newline-delimited records with a per-line size limit.
+func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool) error {
+	const op = "scanTranscriptLines"
+
+	if maxLineSize <= 0 {
+		maxLineSize = maxScannerBuffer
+	}
+
+	readBuffer := make([]byte, 64*1024)
+	line := make([]byte, 0, 64*1024)
+
+	for {
+		n, readErr := r.Read(readBuffer)
+		if n > 0 {
+			chunk := readBuffer[:n]
+			start := 0
+			for i, b := range chunk {
+				if b != '\n' {
+					continue
+				}
+				if len(line)+i-start > maxLineSize {
+					return coreerr.E(op, core.Sprintf("line exceeds %d bytes", maxLineSize), nil)
+				}
+				line = append(line, chunk[start:i]...)
+				if !handle(trimLineBreak(line)) {
+					return nil
+				}
+				line = line[:0]
+				start = i + 1
+			}
+			if start < len(chunk) {
+				if len(line)+len(chunk)-start > maxLineSize {
+					return coreerr.E(op, core.Sprintf("line exceeds %d bytes", maxLineSize), nil)
+				}
+				line = append(line, chunk[start:]...)
+			}
+		}
+
+		if readErr == io.EOF {
+			if len(line) > 0 {
+				if !handle(trimLineBreak(line)) {
+					return nil
+				}
+			}
+			return nil
+		}
+		if readErr != nil {
+			return coreerr.E(op, "read error", readErr)
+		}
+	}
+}
+
+// trimLineBreak removes a trailing carriage return from a scanned line.
+func trimLineBreak(line []byte) []byte {
+	if len(line) > 0 && line[len(line)-1] == '\r' {
+		return line[:len(line)-1]
+	}
+	return line
+}
+
+// transcriptPath joins a projects directory and transcript file name.
+func transcriptPath(projectsDir, name string) string {
+	if projectsDir == "" {
+		return core.CleanPath(name, "/")
+	}
+	return core.CleanPath(core.JoinPath(projectsDir, name), "/")
 }

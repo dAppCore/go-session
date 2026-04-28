@@ -2,9 +2,8 @@
 package session
 
 import (
-	"io/fs"
-	"path"
-	"syscall"
+	"io/fs" // Note: intrinsic — fs.FileInfo metadata for executable checks from hostFS.Stat; no core equivalent
+	"path"  // Note: intrinsic — PATH candidate and temporary tape path construction; no core equivalent
 
 	core "dappco.re/go/core"
 )
@@ -40,6 +39,7 @@ func RenderMP4(sess *Session, outputPath string) error {
 	return nil
 }
 
+// generateTape builds the VHS script used to render a session video.
 func generateTape(sess *Session, outputPath string) string {
 	b := core.NewBuilder()
 
@@ -121,6 +121,7 @@ func generateTape(sess *Session, outputPath string) string {
 	return b.String()
 }
 
+// extractCommand removes a human description suffix from a Bash tool input.
 func extractCommand(input string) string {
 	// Remove description suffix (after " # ")
 	if idx := indexOf(input, " # "); idx > 0 {
@@ -129,6 +130,7 @@ func extractCommand(input string) string {
 	return input
 }
 
+// lookupExecutable resolves an executable name from PATH or validates a direct path.
 func lookupExecutable(name string) string {
 	if name == "" {
 		return ""
@@ -152,6 +154,7 @@ func lookupExecutable(name string) string {
 	return ""
 }
 
+// isExecutablePath reports whether filePath is an executable regular file.
 func isExecutablePath(filePath string) bool {
 	statResult := hostFS.Stat(filePath)
 	if !statResult.OK {
@@ -164,32 +167,12 @@ func isExecutablePath(filePath string) bool {
 	return info.Mode()&0111 != 0
 }
 
+// runCommand executes an external command through the core process abstraction.
 func runCommand(command string, args ...string) error {
-	argv := append([]string{command}, args...)
-	procAttr := &syscall.ProcAttr{
-		Env:   syscall.Environ(),
-		Files: []uintptr{0, 1, 2},
-	}
-
-	pid, err := syscall.ForkExec(command, argv, procAttr)
-	if err != nil {
-		return core.E("runCommand", "fork exec command", err)
-	}
-
-	var status syscall.WaitStatus
-	if _, err := syscall.Wait4(pid, &status, 0, nil); err != nil {
-		return core.E("runCommand", "wait for command", err)
-	}
-
-	if status.Exited() && status.ExitStatus() == 0 {
+	c := sessionCore(nil)
+	runResult := hostProcess(c).Run(hostContext(c), command, args...)
+	if runResult.OK {
 		return nil
 	}
-	if status.Signaled() {
-		return core.E("runCommand", core.Sprintf("command terminated by signal %d", status.Signal()), nil)
-	}
-	if status.Exited() {
-		return core.E("runCommand", core.Sprintf("command exited with status %d", status.ExitStatus()), nil)
-	}
-
-	return core.E("runCommand", "command failed", nil)
+	return core.E("runCommand", "run command", resultError(runResult))
 }
