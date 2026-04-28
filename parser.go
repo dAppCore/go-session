@@ -8,8 +8,8 @@ import (
 	"slices" // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
 	"time"   // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
 
-	core "dappco.re/go/core"
-	coreerr "dappco.re/go/core/log"
+	core "dappco.re/go"
+	coreerr "dappco.re/go"
 )
 
 // maxScannerBuffer is the maximum line length the scanner will accept.
@@ -290,7 +290,9 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 		return nil, nil, coreerr.E("FetchSession", "invalid session path", err)
 	}
 	defer func() {
-		_ = f.Close()
+		if err := f.Close(); err != nil {
+			coreerr.Warn("close transcript", "op", "FetchSession", "path", filePath, "err", err)
+		}
 	}()
 	return parseTranscriptFile(filePath, f)
 }
@@ -310,7 +312,9 @@ func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 		return nil, nil, coreerr.E("ParseTranscript", "unexpected file handle type", nil)
 	}
 	defer func() {
-		_ = f.Close()
+		if err := f.Close(); err != nil {
+			coreerr.Warn("close transcript", "op", "ParseTranscript", "path", filePath, "err", err)
+		}
 	}()
 
 	return parseTranscriptFile(filePath, f)

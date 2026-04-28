@@ -6,7 +6,7 @@ import (
 	"path"
 	"testing"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 // BenchmarkParseTranscript benchmarks parsing a ~1MB+ JSONL file.

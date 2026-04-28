@@ -5,7 +5,7 @@ import (
 	"bytes" // Note: intrinsic — byte-slice helpers implement local string primitives without strings import; no core equivalent
 	"context"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 var hostCore = core.New()

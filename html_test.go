@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 // TestHTML_RenderHTMLBasicSession_Good verifies the behaviour covered by this test case.

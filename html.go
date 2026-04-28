@@ -6,7 +6,7 @@ import (
 	"path" // Note: intrinsic — output parent directory derivation for slash-separated paths; no core equivalent
 	"time" // Note: intrinsic — duration formatting thresholds for rendered summaries; no core equivalent
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 // RenderHTML generates a self-contained HTML timeline from a session.
