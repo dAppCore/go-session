@@ -10,7 +10,7 @@ import (
 	"slices"
 	"testing"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 var testNamePattern = regexp.MustCompile(`^Test[A-Za-z0-9]+_[A-Za-z0-9]+_(Good|Bad|Ugly)$`)
@@ -20,14 +20,14 @@ func TestConventions_BannedImports_Good(t *testing.T) {
 	files := parseGoFiles(t, ".")
 
 	banned := map[string]string{
-		core.Concat("encoding", "/json"): "use dappco.re/go/core JSON helpers instead",
+		core.Concat("encoding", "/json"): "use dappco.re/go JSON helpers instead",
 		core.Concat("error", "s"):        "use core.E/op-aware errors instead",
-		core.Concat("f", "mt"):           "use dappco.re/go/core formatting helpers instead",
+		core.Concat("f", "mt"):           "use dappco.re/go formatting helpers instead",
 		"github.com/pkg/errors":          "use coreerr.E(op, msg, err) for package errors",
-		core.Concat("o", "s"):            "use dappco.re/go/core filesystem helpers instead",
+		core.Concat("o", "s"):            "use dappco.re/go filesystem helpers instead",
 		core.Concat("o", "s/exec"):       "use session command helpers or core process abstractions instead",
-		core.Concat("path", "/filepath"): "use path or dappco.re/go/core path helpers instead",
-		core.Concat("string", "s"):       "use dappco.re/go/core string helpers or local helpers instead",
+		core.Concat("path", "/filepath"): "use path or dappco.re/go path helpers instead",
+		core.Concat("string", "s"):       "use dappco.re/go string helpers or local helpers instead",
 	}
 
 	for _, file := range files {

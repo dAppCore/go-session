@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 // testContext supports the session test suite.

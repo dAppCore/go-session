@@ -5,7 +5,7 @@ import (
 	"io/fs" // Note: intrinsic — fs.FileInfo metadata for executable checks from hostFS.Stat; no core equivalent
 	"path"  // Note: intrinsic — PATH candidate and temporary tape path construction; no core equivalent
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 // RenderMP4 generates an MP4 video from session events using VHS (charmbracelet).

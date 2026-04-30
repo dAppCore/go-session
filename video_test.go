@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 // TestVideo_GenerateTapeBasicSession_Good verifies the behaviour covered by this test case.
@@ -188,14 +188,21 @@ func TestVideo_ExtractCommandStripsDescriptionSuffix_Good(t *testing.T) {
 
 // TestVideo_ExtractCommandNoDescription_Good verifies the behaviour covered by this test case.
 func TestVideo_ExtractCommandNoDescription_Good(t *testing.T) {
-	assertEqual(t, "plain command", extractCommand("plain command"))
+	input := "plain command"
+	result := extractCommand(input)
+
+	assertEqual(t, input, result)
+	assertFalse(t, core.Contains(result, " # "))
 }
 
 // TestVideo_ExtractCommandDescriptionAtStart_Good verifies the behaviour covered by this test case.
 func TestVideo_ExtractCommandDescriptionAtStart_Good(t *testing.T) {
 	// " # " at position 0 means idx <= 0, so it returns the whole input
-	result := extractCommand(" # description only")
-	assertEqual(t, " # description only", result)
+	input := " # description only"
+	result := extractCommand(input)
+
+	assertEqual(t, input, result)
+	assertTrue(t, core.HasPrefix(result, " # "))
 }
 
 // TestVideo_RenderMP4NoVHS_Ugly verifies the behaviour covered by this test case.

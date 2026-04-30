@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 // --- helpers to build synthetic JSONL ---
@@ -791,8 +791,11 @@ func TestParser_ExtractToolInputUnknownTool_Good(t *testing.T) {
 
 // TestParser_ExtractToolInputNilInput_Bad verifies the behaviour covered by this test case.
 func TestParser_ExtractToolInputNilInput_Bad(t *testing.T) {
-	result := extractToolInput("Bash", nil)
+	var input rawJSON
+	result := extractToolInput("Bash", input)
+
 	assertEqual(t, "", result)
+	assertEqual(t, 0, len(input))
 }
 
 // TestParser_ExtractToolInputInvalidJSON_Bad verifies the behaviour covered by this test case.
@@ -807,8 +810,11 @@ func TestParser_ExtractToolInputInvalidJSON_Bad(t *testing.T) {
 
 // TestParser_ExtractResultContentString_Good verifies the behaviour covered by this test case.
 func TestParser_ExtractResultContentString_Good(t *testing.T) {
-	result := extractResultContent("simple string")
-	assertEqual(t, "simple string", result)
+	content := "simple string"
+	result := extractResultContent(content)
+
+	assertEqual(t, content, result)
+	assertContains(t, result, "simple")
 }
 
 // TestParser_ExtractResultContentArray_Good verifies the behaviour covered by this test case.
@@ -830,31 +836,49 @@ func TestParser_ExtractResultContentMap_Good(t *testing.T) {
 
 // TestParser_ExtractResultContentOther_Bad verifies the behaviour covered by this test case.
 func TestParser_ExtractResultContentOther_Bad(t *testing.T) {
-	result := extractResultContent(42)
+	content := 42
+	result := extractResultContent(content)
+
 	assertEqual(t, "42", result)
+	assertEqual(t, "42", core.Sprintf("%d", content))
 }
 
 // --- truncate tests ---
 
 // TestParser_TruncateShort_Good verifies the behaviour covered by this test case.
 func TestParser_TruncateShort_Good(t *testing.T) {
-	assertEqual(t, "hello", truncate("hello", 10))
+	input := "hello"
+	result := truncate(input, 10)
+
+	assertEqual(t, input, result)
+	assertEqual(t, len(input), len(result))
 }
 
 // TestParser_TruncateExact_Good verifies the behaviour covered by this test case.
 func TestParser_TruncateExact_Good(t *testing.T) {
-	assertEqual(t, "hello", truncate("hello", 5))
+	input := "hello"
+	result := truncate(input, len(input))
+
+	assertEqual(t, input, result)
+	assertEqual(t, len(input), len(result))
 }
 
 // TestParser_TruncateLong_Good verifies the behaviour covered by this test case.
 func TestParser_TruncateLong_Good(t *testing.T) {
+	input := "hello world"
 	result := truncate("hello world", 5)
+
 	assertEqual(t, "hello...", result)
+	assertTrue(t, len(result) < len(input))
 }
 
 // TestParser_TruncateEmpty_Good verifies the behaviour covered by this test case.
 func TestParser_TruncateEmpty_Good(t *testing.T) {
-	assertEqual(t, "", truncate("", 10))
+	input := ""
+	result := truncate(input, 10)
+
+	assertEqual(t, input, result)
+	assertEqual(t, 0, len(result))
 }
 
 // --- helper function tests ---
@@ -1550,7 +1574,10 @@ func TestParser_IsExpiredOldSession_Good(t *testing.T) {
 // TestParser_IsExpiredZeroEndTime_Bad verifies the behaviour covered by this test case.
 func TestParser_IsExpiredZeroEndTime_Bad(t *testing.T) {
 	sess := &Session{}
-	assertFalse(t, sess.IsExpired(1*time.Hour))
+	expired := sess.IsExpired(1 * time.Hour)
+
+	assertFalse(t, expired)
+	assertTrue(t, sess.EndTime.IsZero())
 }
 
 // --- FetchSession tests ---

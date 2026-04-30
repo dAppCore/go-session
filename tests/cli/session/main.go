@@ -4,7 +4,7 @@ package main
 import (
 	"time"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 	session "dappco.re/go/session"
 )
 
@@ -20,7 +20,8 @@ func main() {
 	dir := fs.TempDir("go-session-ax10-")
 	require(dir != "", "create temporary directory")
 	defer func() {
-		_ = fs.DeleteAll(dir)
+		deleteResult := fs.DeleteAll(dir)
+		require(deleteResult.OK, "delete temporary directory")
 	}()
 
 	transcriptPath := core.Path(dir, "ax10-session.jsonl")
