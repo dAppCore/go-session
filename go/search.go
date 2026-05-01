@@ -3,7 +3,6 @@ package session
 
 import (
 	"iter"   // Note: intrinsic — public lazy sequence API for search results; no core equivalent
-	"path"   // Note: intrinsic — slash-separated transcript glob path construction; no core equivalent
 	"slices" // Note: intrinsic — slices.Collect materialises search iterator results; no core equivalent
 	"time"   // Note: intrinsic — search result timestamps mirror parsed transcript event times; no core equivalent
 
@@ -24,9 +23,9 @@ type SearchResult struct {
 // Search finds events matching the query across all sessions in the directory.
 //
 // Example:
-// results, err := session.Search("/tmp/projects", "go test")
-func Search(projectsDir, query string) ([]SearchResult, error) {
-	return slices.Collect(SearchSeq(projectsDir, query)), nil
+// result := session.Search("/tmp/projects", "go test")
+func Search(projectsDir, query string) core.Result {
+	return core.Ok(slices.Collect(SearchSeq(projectsDir, query)))
 }
 
 // SearchSeq returns an iterator over search results matching the query across all sessions.
@@ -38,15 +37,16 @@ func Search(projectsDir, query string) ([]SearchResult, error) {
 //	}
 func SearchSeq(projectsDir, query string) iter.Seq[SearchResult] {
 	return func(yield func(SearchResult) bool) {
-		matches := core.PathGlob(path.Join(projectsDir, "*.jsonl"))
+		matches := core.PathGlob(core.PathJoin(projectsDir, "*.jsonl"))
 
 		query = core.Lower(query)
 
 		for _, filePath := range matches {
-			sess, _, err := ParseTranscript(filePath)
-			if err != nil {
+			parseResult := ParseTranscript(filePath)
+			if !parseResult.OK {
 				continue
 			}
+			sess := parseResult.Value.(ParsedSession).Session
 
 			for evt := range sess.EventsSeq() {
 				if evt.Type != "tool_use" {

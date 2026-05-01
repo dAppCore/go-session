@@ -3,7 +3,6 @@ package session
 
 import (
 	"io/fs" // Note: intrinsic — fs.FileInfo metadata for executable checks from hostFS.Stat; no core equivalent
-	"path"  // Note: intrinsic — PATH candidate and temporary tape path construction; no core equivalent
 
 	core "dappco.re/go"
 )
@@ -11,32 +10,33 @@ import (
 // RenderMP4 generates an MP4 video from session events using VHS (charmbracelet).
 //
 // Example:
-// err := session.RenderMP4(sess, "/tmp/session.mp4")
-func RenderMP4(sess *Session, outputPath string) error {
+// result := session.RenderMP4(sess, "/tmp/session.mp4")
+func RenderMP4(sess *Session, outputPath string) core.Result {
 	vhsPath := lookupExecutable("vhs")
 	if vhsPath == "" {
-		return core.E("RenderMP4", "vhs not installed (go install github.com/charmbracelet/vhs@latest)", nil)
+		return core.Fail(core.E("RenderMP4", "vhs not installed (go install github.com/charmbracelet/vhs@latest)", nil))
 	}
 
 	tape := generateTape(sess, outputPath)
 
 	tmpDir := hostFS.TempDir("session-")
 	if tmpDir == "" {
-		return core.E("RenderMP4", "failed to create temp dir", nil)
+		return core.Fail(core.E("RenderMP4", "failed to create temp dir", nil))
 	}
 	defer hostFS.DeleteAll(tmpDir)
 
-	tapePath := path.Join(tmpDir, core.Concat(core.ID(), ".tape"))
+	tapePath := core.PathJoin(tmpDir, core.Concat(core.ID(), ".tape"))
 	writeResult := hostFS.Write(tapePath, tape)
 	if !writeResult.OK {
-		return core.E("RenderMP4", "write tape", resultError(writeResult))
+		return core.Fail(core.E("RenderMP4", "write tape", resultError(writeResult)))
 	}
 
-	if err := runCommand(vhsPath, tapePath); err != nil {
-		return core.E("RenderMP4", "vhs render", err)
+	runResult := runCommand(vhsPath, tapePath)
+	if !runResult.OK {
+		return core.Fail(core.E("RenderMP4", "vhs render", resultError(runResult)))
 	}
 
-	return nil
+	return core.Ok(nil)
 }
 
 // generateTape builds the VHS script used to render a session video.
@@ -146,7 +146,7 @@ func lookupExecutable(name string) string {
 		if dir == "" {
 			dir = "."
 		}
-		candidate := path.Join(dir, name)
+		candidate := core.PathJoin(dir, name)
 		if isExecutablePath(candidate) {
 			return candidate
 		}
@@ -168,11 +168,11 @@ func isExecutablePath(filePath string) bool {
 }
 
 // runCommand executes an external command through the core process abstraction.
-func runCommand(command string, args ...string) error {
+func runCommand(command string, args ...string) core.Result {
 	c := sessionCore(nil)
 	runResult := hostProcess(c).Run(hostContext(c), command, args...)
 	if runResult.OK {
-		return nil
+		return core.Ok(nil)
 	}
-	return core.E("runCommand", "run command", resultError(runResult))
+	return core.Fail(core.E("runCommand", "run command", resultError(runResult)))
 }

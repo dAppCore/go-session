@@ -10,12 +10,15 @@ import (
 	coreerr "dappco.re/go"
 )
 
-type noFollowFile struct {
+type nofollowfile struct {
 	fd int
 }
 
 // Read reads bytes from a descriptor opened without following symlinks.
-func (f *noFollowFile) Read(p []byte) (int, error) {
+func (f *nofollowfile) Read(p []byte) (
+	int,
+	error,
+) {
 	n, err := syscall.Read(f.fd, p)
 	if err != nil {
 		return n, coreerr.E("noFollowFile.Read", "read transcript descriptor", err)
@@ -27,7 +30,9 @@ func (f *noFollowFile) Read(p []byte) (int, error) {
 }
 
 // Close closes a descriptor opened without following symlinks.
-func (f *noFollowFile) Close() error {
+func (f *nofollowfile) Close() (
+	err error,
+) {
 	if err := syscall.Close(f.fd); err != nil {
 		return coreerr.E("noFollowFile.Close", "close transcript descriptor", err)
 	}
@@ -35,32 +40,34 @@ func (f *noFollowFile) Close() error {
 }
 
 // openTranscriptNoFollow opens a regular transcript file without following symlinks.
-func openTranscriptNoFollow(filePath string) (io.ReadCloser, error) {
+func openTranscriptNoFollow(filePath string) coreerr.Result {
 	const op = "openTranscriptNoFollow"
 
 	fd, err := syscall.Open(filePath, syscall.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
-		return nil, coreerr.E(op, "open transcript without following symlinks", err)
+		return coreerr.Fail(coreerr.E(op, "open transcript without following symlinks", err))
 	}
 
 	var st syscall.Stat_t
 	if err := syscall.Fstat(fd, &st); err != nil {
 		if closeErr := closeNoFollowFD(fd); closeErr != nil {
-			return nil, closeErr
+			return coreerr.Fail(closeErr)
 		}
-		return nil, coreerr.E(op, "stat transcript descriptor", err)
+		return coreerr.Fail(coreerr.E(op, "stat transcript descriptor", err))
 	}
 	if st.Mode&syscall.S_IFMT != syscall.S_IFREG {
 		if closeErr := closeNoFollowFD(fd); closeErr != nil {
-			return nil, closeErr
+			return coreerr.Fail(closeErr)
 		}
-		return nil, coreerr.E(op, "not a regular file", nil)
+		return coreerr.Fail(coreerr.E(op, "not a regular file", nil))
 	}
-	return &noFollowFile{fd: fd}, nil
+	return coreerr.Ok(io.ReadCloser(&nofollowfile{fd: fd}))
 }
 
 // closeNoFollowFD closes a raw descriptor after a failed secure-open check.
-func closeNoFollowFD(fd int) error {
+func closeNoFollowFD(fd int) (
+	err error,
+) {
 	if err := syscall.Close(fd); err != nil {
 		return coreerr.E("openTranscriptNoFollow", "close rejected transcript descriptor", err)
 	}

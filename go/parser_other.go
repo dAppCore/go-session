@@ -10,8 +10,8 @@ import (
 )
 
 // openTranscriptNoFollow reports that secure no-follow opens are unavailable on this platform.
-func openTranscriptNoFollow(filePath string) (io.ReadCloser, error) {
-	return nil, coreerr.E("openTranscriptNoFollow", "secure no-follow transcript opens are unsupported on this platform: "+filePath, nil)
+func openTranscriptNoFollow(filePath string) coreerr.Result {
+	return coreerr.Fail(coreerr.E("openTranscriptNoFollow", "secure no-follow transcript opens are unsupported on this platform: "+filePath, nil))
 }
 
 // isTranscriptMissing reports whether err wraps a missing transcript path error.

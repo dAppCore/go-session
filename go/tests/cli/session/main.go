@@ -28,8 +28,11 @@ func main() {
 	writeResult := fs.WriteMode(transcriptPath, transcript, 0o600)
 	require(writeResult.OK, "write transcript")
 
-	sess, stats, err := session.ParseTranscript(transcriptPath)
-	requireNoError(err, "parse transcript")
+	parseResult := session.ParseTranscript(transcriptPath)
+	requireResult(parseResult, "parse transcript")
+	parsed := parseResult.Value.(session.ParsedSession)
+	sess := parsed.Session
+	stats := parsed.Stats
 	require(sess.ID == "ax10-session", "session ID should come from the file name")
 	require(sess.Path == transcriptPath, "session path should match the parsed file")
 	require(len(sess.Events) == 3, "expected user, tool, and assistant events")
@@ -53,22 +56,25 @@ func main() {
 	require(analytics.SuccessRate == expectedSuccessRate, "expected analytics success rate")
 	require(core.Contains(session.FormatAnalytics(analytics), "Bash"), "expected formatted analytics to include Bash")
 
-	results, err := session.Search(dir, "ax10")
-	requireNoError(err, "search sessions")
+	searchResult := session.Search(dir, "ax10")
+	requireResult(searchResult, "search sessions")
+	results := searchResult.Value.([]session.SearchResult)
 	require(len(results) == 1, "expected one search result")
 	require(results[0].SessionID == "ax10-session", "expected search result session ID")
 
-	sessions, err := session.ListSessions(dir)
-	requireNoError(err, "list sessions")
+	listResult := session.ListSessions(dir)
+	requireResult(listResult, "list sessions")
+	sessions := listResult.Value.([]session.Session)
 	require(len(sessions) == 1, "expected one listed session")
 	require(sessions[0].ID == "ax10-session", "expected listed session ID")
 
-	fetched, _, err := session.FetchSession(dir, "ax10-session")
-	requireNoError(err, "fetch session")
-	require(fetched.ID == sess.ID, "expected fetched session to match parsed session")
+	fetchResult := session.FetchSession(dir, "ax10-session")
+	requireResult(fetchResult, "fetch session")
+	fetched := fetchResult.Value.(session.ParsedSession)
+	require(fetched.Session.ID == sess.ID, "expected fetched session to match parsed session")
 
 	htmlPath := core.Path(dir, "timeline.html")
-	requireNoError(session.RenderHTML(sess, htmlPath), "render HTML")
+	requireResult(session.RenderHTML(sess, htmlPath), "render HTML")
 	readResult := fs.Read(htmlPath)
 	require(readResult.OK, "read rendered HTML")
 	html, ok := readResult.Value.(string)
@@ -102,9 +108,9 @@ func require(ok bool, msg string) {
 	}
 }
 
-// requireNoError stops the current test case when its condition is not met.
-func requireNoError(err error, msg string) {
-	if err != nil {
-		panic(msg + ": " + err.Error())
+// requireResult stops the current test case when its condition is not met.
+func requireResult(result core.Result, msg string) {
+	if !result.OK {
+		panic(msg + ": " + result.Error())
 	}
 }

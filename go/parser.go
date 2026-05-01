@@ -63,13 +63,13 @@ type rawEntry struct {
 	Type      string  `json:"type"`
 	Timestamp string  `json:"timestamp"`
 	SessionID string  `json:"sessionId"`
-	Message   rawJSON `json:"message"`
+	Message   rawjson `json:"message"`
 	UserType  string  `json:"userType"`
 }
 
 type rawMessage struct {
 	Role    string    `json:"role"`
-	Content []rawJSON `json:"content"`
+	Content []rawjson `json:"content"`
 }
 
 type contentBlock struct {
@@ -77,7 +77,7 @@ type contentBlock struct {
 	Name      string  `json:"name,omitempty"`
 	ID        string  `json:"id,omitempty"`
 	Text      string  `json:"text,omitempty"`
-	Input     rawJSON `json:"input,omitempty"`
+	Input     rawjson `json:"input,omitempty"`
 	ToolUseID string  `json:"tool_use_id,omitempty"`
 	Content   any     `json:"content,omitempty"`
 	IsError   *bool   `json:"is_error,omitempty"`
@@ -108,12 +108,12 @@ type writeInput struct {
 
 type grepInput struct {
 	Pattern string `json:"pattern"`
-	Path    string `json:"path"`
+	Path    string `json:"path,omitempty"`
 }
 
 type globInput struct {
 	Pattern string `json:"pattern"`
-	Path    string `json:"path"`
+	Path    string `json:"path,omitempty"`
 }
 
 type taskInput struct {
@@ -133,12 +133,17 @@ type ParseStats struct {
 	Warnings          []string
 }
 
+type ParsedSession struct {
+	Session *Session
+	Stats   *ParseStats
+}
+
 // ListSessions returns all sessions found in the Claude projects directory.
 //
 // Example:
-// sessions, err := session.ListSessions("/tmp/projects")
-func ListSessions(projectsDir string) ([]Session, error) {
-	return slices.Collect(ListSessionsSeq(projectsDir)), nil
+// result := session.ListSessions("/tmp/projects")
+func ListSessions(projectsDir string) core.Result {
+	return core.Ok(slices.Collect(ListSessionsSeq(projectsDir)))
 }
 
 // ListSessionsSeq returns an iterator over all sessions found in the Claude projects directory.
@@ -159,11 +164,12 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 			base := core.PathBase(filePath)
 			id := core.TrimSuffix(base, ".jsonl")
 
-			f, err := openTranscriptNoFollow(filePath)
-			if err != nil {
-				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", err)
+			openResult := openTranscriptNoFollow(filePath)
+			if !openResult.OK {
+				coreerr.Warn("skip unreadable transcript", "op", op, "file", filePath, "err", openResult.Error())
 				continue
 			}
+			f := openResult.Value.(io.ReadCloser)
 
 			s := Session{
 				ID:   id,
@@ -172,7 +178,7 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 
 			// Quick scan for first and last timestamps
 			var firstTS, lastTS string
-			scanErr := scanTranscriptLines(f, maxScannerBuffer, func(line []byte) bool {
+			scanResult := scanTranscriptLines(f, maxScannerBuffer, func(line []byte) bool {
 				var entry rawEntry
 				if !core.JSONUnmarshal(line, &entry).OK {
 					return true
@@ -187,12 +193,12 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 				return true
 			})
 			closeErr := f.Close()
-			if scanErr != nil {
-				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", scanErr)
+			if !scanResult.OK {
+				coreerr.Warn("skip unreadable transcript", "op", op, "file", filePath, "err", scanResult.Error())
 				continue
 			}
 			if closeErr != nil {
-				coreerr.Warn("skip unreadable transcript", "op", op, "path", filePath, "err", closeErr)
+				coreerr.Warn("skip unreadable transcript", "op", op, "file", filePath, "err", closeErr)
 				continue
 			}
 
@@ -234,8 +240,8 @@ func ListSessionsSeq(projectsDir string) iter.Seq[Session] {
 // modified more than maxAge ago. Returns the number of files deleted.
 //
 // Example:
-// deleted, err := session.PruneSessions("/tmp/projects", 24*time.Hour)
-func PruneSessions(projectsDir string, maxAge time.Duration) (int, error) {
+// result := session.PruneSessions("/tmp/projects", 24*time.Hour)
+func PruneSessions(projectsDir string, maxAge time.Duration) core.Result {
 	matches := core.PathGlob(transcriptPath(projectsDir, "*.jsonl"))
 
 	var deleted int
@@ -256,7 +262,7 @@ func PruneSessions(projectsDir string, maxAge time.Duration) (int, error) {
 			}
 		}
 	}
-	return deleted, nil
+	return core.Ok(deleted)
 }
 
 // IsExpired returns true if the session's end time is older than the given maxAge
@@ -275,23 +281,25 @@ func (s *Session) IsExpired(maxAge time.Duration) bool {
 // It ensures the ID does not contain path traversal characters.
 //
 // Example:
-// sess, stats, err := session.FetchSession("/tmp/projects", "abc123")
-func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
+// result := session.FetchSession("/tmp/projects", "abc123")
+func FetchSession(projectsDir, id string) core.Result {
 	if core.Contains(id, "..") || containsAny(id, `/\`) {
-		return nil, nil, coreerr.E("FetchSession", "invalid session id", nil)
+		return core.Fail(coreerr.E("FetchSession", "invalid session id", nil))
 	}
 
 	filePath := transcriptPath(projectsDir, id+".jsonl")
-	f, err := openTranscriptNoFollow(filePath)
-	if err != nil {
+	openResult := openTranscriptNoFollow(filePath)
+	if !openResult.OK {
+		err := resultError(openResult)
 		if isTranscriptMissing(err) {
-			return nil, nil, coreerr.E("FetchSession", "open transcript", err)
+			return core.Fail(coreerr.E("FetchSession", "open transcript", err))
 		}
-		return nil, nil, coreerr.E("FetchSession", "invalid session path", err)
+		return core.Fail(coreerr.E("FetchSession", "invalid session path", err))
 	}
+	f := openResult.Value.(io.ReadCloser)
 	defer func() {
 		if err := f.Close(); err != nil {
-			coreerr.Warn("close transcript", "op", "FetchSession", "path", filePath, "err", err)
+			coreerr.Warn("close transcript", "op", "FetchSession", "file", filePath, "err", err)
 		}
 	}()
 	return parseTranscriptFile(filePath, f)
@@ -301,19 +309,19 @@ func FetchSession(projectsDir, id string) (*Session, *ParseStats, error) {
 // Malformed or truncated lines are skipped; diagnostics are reported in ParseStats.
 //
 // Example:
-// sess, stats, err := session.ParseTranscript("/tmp/projects/abc123.jsonl")
-func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
+// result := session.ParseTranscript("/tmp/projects/abc123.jsonl")
+func ParseTranscript(filePath string) core.Result {
 	openResult := hostFS.Open(filePath)
 	if !openResult.OK {
-		return nil, nil, coreerr.E("ParseTranscript", "open transcript", resultError(openResult))
+		return core.Fail(coreerr.E("ParseTranscript", "open transcript", resultError(openResult)))
 	}
 	f, ok := openResult.Value.(io.ReadCloser)
 	if !ok {
-		return nil, nil, coreerr.E("ParseTranscript", "unexpected file handle type", nil)
+		return core.Fail(coreerr.E("ParseTranscript", "unexpected file handle type", nil))
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			coreerr.Warn("close transcript", "op", "ParseTranscript", "path", filePath, "err", err)
+			coreerr.Warn("close transcript", "op", "ParseTranscript", "file", filePath, "err", err)
 		}
 	}()
 
@@ -321,18 +329,19 @@ func ParseTranscript(filePath string) (*Session, *ParseStats, error) {
 }
 
 // parseTranscriptFile parses an already-open transcript reader and assigns path metadata.
-func parseTranscriptFile(filePath string, r io.Reader) (*Session, *ParseStats, error) {
+func parseTranscriptFile(filePath string, r io.Reader) core.Result {
 	base := core.PathBase(filePath)
 	id := core.TrimSuffix(base, ".jsonl")
 
-	sess, stats, err := parseFromReader(r, id)
-	if sess != nil {
-		sess.Path = filePath
+	parseResult := parseFromReader(r, id)
+	if !parseResult.OK {
+		return core.Fail(coreerr.E("ParseTranscript", "parse transcript", resultError(parseResult)))
 	}
-	if err != nil {
-		return sess, stats, coreerr.E("ParseTranscript", "parse transcript", err)
+	parsed := parseResult.Value.(ParsedSession)
+	if parsed.Session != nil {
+		parsed.Session.Path = filePath
 	}
-	return sess, stats, nil
+	return core.Ok(parsed)
 }
 
 // ParseTranscriptReader parses a JSONL session from an io.Reader, enabling
@@ -340,19 +349,19 @@ func parseTranscriptFile(filePath string, r io.Reader) (*Session, *ParseStats, e
 // the session ID (since there is no file name to derive it from).
 //
 // Example:
-// sess, stats, err := session.ParseTranscriptReader(reader, "abc123")
-func ParseTranscriptReader(r io.Reader, id string) (*Session, *ParseStats, error) {
-	sess, stats, err := parseFromReader(r, id)
-	if err != nil {
-		return sess, stats, coreerr.E("ParseTranscriptReader", "parse transcript", err)
+// result := session.ParseTranscriptReader(reader, "abc123")
+func ParseTranscriptReader(r io.Reader, id string) core.Result {
+	parseResult := parseFromReader(r, id)
+	if !parseResult.OK {
+		return core.Fail(coreerr.E("ParseTranscriptReader", "parse transcript", resultError(parseResult)))
 	}
-	return sess, stats, nil
+	return parseResult
 }
 
 // parseFromReader is the shared implementation for both file-based and
 // reader-based parsing. It scans line-by-line with an 8 MiB buffer,
 // gracefully skipping malformed lines.
-func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
+func parseFromReader(r io.Reader, id string) core.Result {
 	sess := &Session{
 		ID: id,
 	}
@@ -371,7 +380,7 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 	var lastRaw string
 	var lastLineFailed bool
 
-	scanErr := scanTranscriptLines(r, maxScannerBuffer, func(line []byte) bool {
+	scanResult := scanTranscriptLines(r, maxScannerBuffer, func(line []byte) bool {
 		lineNum++
 		stats.TotalLines++
 
@@ -505,8 +514,8 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 		stats.Warnings = append(stats.Warnings, "truncated final line")
 	}
 
-	if scanErr != nil {
-		return nil, stats, scanErr
+	if !scanResult.OK {
+		return core.Fail(resultError(scanResult))
 	}
 
 	// Track orphaned tool calls (tool_use with no matching result).
@@ -518,11 +527,11 @@ func parseFromReader(r io.Reader, id string) (*Session, *ParseStats, error) {
 		}
 	}
 
-	return sess, stats, nil
+	return core.Ok(ParsedSession{Session: sess, Stats: stats})
 }
 
 // extractToolInput converts raw Claude tool input into a concise display string.
-func extractToolInput(toolName string, raw rawJSON) string {
+func extractToolInput(toolName string, raw rawjson) string {
 	if raw == nil {
 		return ""
 	}
@@ -623,7 +632,7 @@ func truncate(s string, max int) string {
 }
 
 // scanTranscriptLines streams newline-delimited records with a per-line size limit.
-func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool) error {
+func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool) core.Result {
 	const op = "scanTranscriptLines"
 
 	if maxLineSize <= 0 {
@@ -643,18 +652,18 @@ func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool)
 					continue
 				}
 				if len(line)+i-start > maxLineSize {
-					return coreerr.E(op, core.Sprintf("line exceeds %d bytes", maxLineSize), nil)
+					return core.Fail(coreerr.E(op, core.Sprintf("line exceeds %d bytes", maxLineSize), nil))
 				}
 				line = append(line, chunk[start:i]...)
 				if !handle(trimLineBreak(line)) {
-					return nil
+					return core.Ok(nil)
 				}
 				line = line[:0]
 				start = i + 1
 			}
 			if start < len(chunk) {
 				if len(line)+len(chunk)-start > maxLineSize {
-					return coreerr.E(op, core.Sprintf("line exceeds %d bytes", maxLineSize), nil)
+					return core.Fail(coreerr.E(op, core.Sprintf("line exceeds %d bytes", maxLineSize), nil))
 				}
 				line = append(line, chunk[start:]...)
 			}
@@ -663,13 +672,13 @@ func scanTranscriptLines(r io.Reader, maxLineSize int, handle func([]byte) bool)
 		if readErr == io.EOF {
 			if len(line) > 0 {
 				if !handle(trimLineBreak(line)) {
-					return nil
+					return core.Ok(nil)
 				}
 			}
-			return nil
+			return core.Ok(nil)
 		}
 		if readErr != nil {
-			return coreerr.E(op, "read error", readErr)
+			return core.Fail(coreerr.E(op, "read error", readErr))
 		}
 	}
 }
