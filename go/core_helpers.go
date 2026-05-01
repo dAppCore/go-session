@@ -2,7 +2,6 @@
 package session
 
 import (
-	"bytes" // Note: intrinsic — byte-slice helpers implement local string primitives without strings import; no core equivalent
 	"context"
 
 	core "dappco.re/go"
@@ -34,19 +33,24 @@ func hostProcess(c *core.Core) *core.Process {
 	return sessionCore(c).Process()
 }
 
-type rawJSON []byte
+type rawjson []byte
 
 // UnmarshalJSON stores raw JSON bytes without decoding their nested structure.
-func (m *rawJSON) UnmarshalJSON(data []byte) error {
+func (m *rawjson) UnmarshalJSON(data []byte) (
+	err error,
+) {
 	if m == nil {
-		return core.E("rawJSON.UnmarshalJSON", "nil receiver", nil)
+		return core.E("rawjson.UnmarshalJSON", "nil receiver", nil)
 	}
 	*m = append((*m)[:0], data...)
 	return nil
 }
 
 // MarshalJSON returns the stored raw JSON bytes or null for a nil value.
-func (m rawJSON) MarshalJSON() ([]byte, error) {
+func (m rawjson) MarshalJSON() (
+	[]byte,
+	error,
+) {
 	if m == nil {
 		return []byte("null"), nil
 	}
@@ -54,7 +58,9 @@ func (m rawJSON) MarshalJSON() ([]byte, error) {
 }
 
 // resultError extracts an error from a failed core result.
-func resultError(result core.Result) error {
+func resultError(result core.Result) (
+	err error,
+) {
 	if result.OK {
 		return nil
 	}
@@ -69,14 +75,20 @@ func repeatString(s string, count int) string {
 	if s == "" || count <= 0 {
 		return ""
 	}
-	return string(bytes.Repeat([]byte(s), count))
+	b := core.NewBuilder()
+	for range count {
+		b.WriteString(s)
+	}
+	return b.String()
 }
 
 // containsAny reports whether s contains any rune from chars.
 func containsAny(s, chars string) bool {
 	for _, ch := range chars {
-		if bytes.ContainsRune([]byte(s), ch) {
-			return true
+		for _, candidate := range s {
+			if candidate == ch {
+				return true
+			}
 		}
 	}
 	return false
@@ -84,7 +96,19 @@ func containsAny(s, chars string) bool {
 
 // indexOf returns the byte index of substr within s.
 func indexOf(s, substr string) int {
-	return bytes.Index([]byte(s), []byte(substr))
+	if substr == "" {
+		return 0
+	}
+	if len(substr) > len(s) {
+		return -1
+	}
+	limit := len(s) - len(substr)
+	for i := 0; i <= limit; i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }
 
 // trimQuotes removes matching single-token quote delimiters from s.

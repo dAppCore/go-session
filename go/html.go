@@ -3,7 +3,6 @@ package session
 
 import (
 	"html" // Note: intrinsic — escaping transcript content for generated HTML; stdlib encoder is the output contract
-	"path" // Note: intrinsic — output parent directory derivation for slash-separated paths; no core equivalent
 	"time" // Note: intrinsic — duration formatting thresholds for rendered summaries; no core equivalent
 
 	core "dappco.re/go"
@@ -12,10 +11,10 @@ import (
 // RenderHTML generates a self-contained HTML timeline from a session.
 //
 // Example:
-// err := session.RenderHTML(sess, "/tmp/session.html")
-func RenderHTML(sess *Session, outputPath string) error {
-	if !hostFS.IsDir(path.Dir(outputPath)) {
-		return core.E("RenderHTML", "parent directory does not exist", nil)
+// result := session.RenderHTML(sess, "/tmp/session.html")
+func RenderHTML(sess *Session, outputPath string) core.Result {
+	if !hostFS.IsDir(core.PathDir(outputPath)) {
+		return core.Fail(core.E("RenderHTML", "parent directory does not exist", nil))
 	}
 
 	duration := sess.EndTime.Sub(sess.StartTime)
@@ -257,10 +256,10 @@ document.addEventListener('DOMContentLoaded', openHashEvent);
 
 	writeResult := hostFS.Write(outputPath, b.String())
 	if !writeResult.OK {
-		return core.E("RenderHTML", "write html", resultError(writeResult))
+		return core.Fail(core.E("RenderHTML", "write html", resultError(writeResult)))
 	}
 
-	return nil
+	return core.Ok(nil)
 }
 
 // shortID returns the abbreviated identifier used by rendered summaries.
