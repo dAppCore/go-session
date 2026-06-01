@@ -69,3 +69,39 @@ func TestSearch_SearchSeq_Ugly(t *testing.T) {
 
 	core.AssertEmpty(t, matches)
 }
+
+// TestSearch_SearchSeq_EarlyBreak stops after the first match, exercising
+// the yield-false return path inside the iterator.
+func TestSearch_SearchSeq_EarlyBreak(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "a.jsonl",
+		toolUseEntry("Bash", "t1", map[string]any{"command": "go test ./a"}), toolResultEntry("t1", "PASS", false),
+		toolUseEntry("Bash", "t2", map[string]any{"command": "go test ./b"}), toolResultEntry("t2", "PASS", false),
+	)
+
+	count := 0
+	for range SearchSeq(dir, "go test") {
+		count++
+		break
+	}
+
+	core.AssertEqual(t, 1, count)
+}
+
+// TestSearch_SearchSeq_OutputMatch matches on event output when the query is
+// absent from the input, returning a truncated output context.
+func TestSearch_SearchSeq_OutputMatch(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "out.jsonl",
+		toolUseEntry("Read", "r1", map[string]any{"file_path": "/tmp/x"}),
+		toolResultEntry("r1", "the needle is in the output", false),
+	)
+
+	var matches []SearchResult
+	for item := range SearchSeq(dir, "needle") {
+		matches = append(matches, item)
+	}
+
+	core.AssertLen(t, matches, 1)
+	core.AssertContains(t, matches[0].Match, "/tmp/x")
+}

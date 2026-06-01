@@ -276,3 +276,76 @@ func TestParser_ParseTranscriptReader_Ugly(t *testing.T) {
 	core.AssertEqual(t, "empty", parsed.Session.ID)
 	core.AssertEmpty(t, parsed.Session.Events)
 }
+
+// assistantTextEntry builds an assistant message carrying a plain text block.
+func assistantTextEntry(text string) string {
+	result := core.JSONMarshal(map[string]any{
+		"type":      "assistant",
+		"timestamp": ts(),
+		"sessionId": "test-session",
+		"message":   map[string]any{"role": "assistant", "content": []map[string]any{{"type": "text", "text": text}}},
+	})
+	return string(result.Value.([]byte))
+}
+
+// TestParser_parseFromReader_BadTimestamp records a warning and skips the
+// event when an entry carries an unparseable timestamp.
+func TestParser_parseFromReader_BadTimestamp(t *testing.T) {
+	line := jsonLine(t, map[string]any{
+		"type":      "user",
+		"timestamp": "not-a-timestamp",
+		"message":   map[string]any{"content": []map[string]any{{"type": "text", "text": "hi"}}},
+	})
+
+	parsed := parsedValue(t, ParseTranscriptReader(core.NewReader(line), "ts"))
+
+	core.AssertEmpty(t, parsed.Session.Events)
+	core.AssertContains(t, core.Join("\n", parsed.Stats.Warnings...), "bad timestamp")
+}
+
+// TestParser_parseFromReader_AssistantText captures assistant text blocks as
+// assistant events.
+func TestParser_parseFromReader_AssistantText(t *testing.T) {
+	parsed := parsedValue(t, ParseTranscriptReader(core.NewReader(assistantTextEntry("thinking")), "asst"))
+
+	core.AssertLen(t, parsed.Session.Events, 1)
+	core.AssertEqual(t, "assistant", parsed.Session.Events[0].Type)
+	core.AssertEqual(t, "thinking", parsed.Session.Events[0].Input)
+}
+
+// TestParser_parseFromReader_OrphanedToolCall reports a tool_use with no
+// matching tool_result as orphaned.
+func TestParser_parseFromReader_OrphanedToolCall(t *testing.T) {
+	parsed := parsedValue(t, ParseTranscriptReader(
+		core.NewReader(toolUseEntry("Bash", "orphan-1", map[string]any{"command": "ls"})), "orph"))
+
+	core.AssertEqual(t, 1, parsed.Stats.OrphanedToolCalls)
+	core.AssertContains(t, core.Join("\n", parsed.Stats.Warnings...), "orphaned tool call: orphan-1")
+	core.AssertEmpty(t, parsed.Session.Events)
+}
+
+// TestParser_parseFromReader_TruncatedFinalLine flags a trailing malformed
+// line as a truncated final line.
+func TestParser_parseFromReader_TruncatedFinalLine(t *testing.T) {
+	input := core.Concat(userTextEntry("ok"), "\n", "{partial")
+
+	parsed := parsedValue(t, ParseTranscriptReader(core.NewReader(input), "trunc"))
+
+	core.AssertContains(t, core.Join("\n", parsed.Stats.Warnings...), "truncated final line")
+}
+
+// TestParser_ListSessionsSeq_EarlyBreak stops the iterator after the first
+// session, exercising the yield-false return path.
+func TestParser_ListSessionsSeq_EarlyBreak(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "a.jsonl", userTextEntry("a"))
+	writeJSONL(t, dir, "b.jsonl", userTextEntry("b"))
+
+	count := 0
+	for range ListSessionsSeq(dir) {
+		count++
+		break
+	}
+
+	core.AssertEqual(t, 1, count)
+}
