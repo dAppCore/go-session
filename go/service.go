@@ -200,11 +200,11 @@ func (s *Service) handleAnalyse(_ core.Context, opts core.Options) core.Result {
 	if !fetchR.OK {
 		return fetchR
 	}
-	sess, ok := fetchR.Value.(*Session)
-	if !ok || sess == nil {
+	parsed, ok := fetchR.Value.(ParsedSession)
+	if !ok || parsed.Session == nil {
 		return core.Fail(core.E("session.analyse", "fetched session is invalid", nil))
 	}
-	return core.Ok(Analyse(sess))
+	return core.Ok(Analyse(parsed.Session))
 }
 
 // handleRenderHTML — `session.render_html` action handler. Reads
@@ -229,11 +229,11 @@ func (s *Service) handleRenderHTML(_ core.Context, opts core.Options) core.Resul
 	if !fetchR.OK {
 		return fetchR
 	}
-	sess, ok := fetchR.Value.(*Session)
-	if !ok || sess == nil {
+	parsed, ok := fetchR.Value.(ParsedSession)
+	if !ok || parsed.Session == nil {
 		return core.Fail(core.E("session.render_html", "fetched session is invalid", nil))
 	}
-	return RenderHTML(sess, output)
+	return RenderHTML(parsed.Session, output)
 }
 
 // handleRenderMP4 — `session.render_mp4` action handler. Reads opts.id
@@ -258,9 +258,9 @@ func (s *Service) handleRenderMP4(_ core.Context, opts core.Options) core.Result
 	if !fetchR.OK {
 		return fetchR
 	}
-	sess, ok := fetchR.Value.(*Session)
-	if !ok || sess == nil {
+	parsed, ok := fetchR.Value.(ParsedSession)
+	if !ok || parsed.Session == nil {
 		return core.Fail(core.E("session.render_mp4", "fetched session is invalid", nil))
 	}
-	return RenderMP4(sess, output)
+	return RenderMP4(parsed.Session, output)
 }
