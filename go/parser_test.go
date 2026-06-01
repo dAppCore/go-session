@@ -2,12 +2,21 @@
 package session
 
 import (
+	"errors"
 	"syscall"
 	"testing"
 	"time"
 
 	core "dappco.re/go"
 )
+
+// failingReader returns a fixed error on first read, used to exercise the
+// scan-failure propagation path.
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) {
+	return 0, errors.New("synthetic read failure")
+}
 
 func ts() string {
 	return time.Unix(1, 0).UTC().Format(time.RFC3339Nano)
@@ -332,6 +341,15 @@ func TestParser_parseFromReader_TruncatedFinalLine(t *testing.T) {
 	parsed := parsedValue(t, ParseTranscriptReader(core.NewReader(input), "trunc"))
 
 	core.AssertContains(t, core.Join("\n", parsed.Stats.Warnings...), "truncated final line")
+}
+
+// TestParser_ParseTranscriptReader_ScanError propagates a reader failure as
+// a wrapped parse error rather than silently returning an empty session.
+func TestParser_ParseTranscriptReader_ScanError(t *testing.T) {
+	result := ParseTranscriptReader(failingReader{}, "boom")
+
+	core.AssertFalse(t, result.OK)
+	core.AssertContains(t, result.Error(), "parse transcript")
 }
 
 // TestParser_ListSessionsSeq_EarlyBreak stops the iterator after the first
