@@ -1,0 +1,25 @@
+# Template CI workflow for Core ecosystem Go repos
+# Copy to .github/workflows/ci.yml in each repo
+#
+# Triggers:
+#   - Push to main/dev → full test
+#   - PR to main       → full test
+#
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dAppCore/build/actions/build/core@v4
+        with:
+          go-version: "1.26"
+          run-vet: "true"
