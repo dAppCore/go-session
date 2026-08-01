@@ -19,10 +19,11 @@ func RenderMP4(sess *Session, outputPath string) core.Result {
 
 	tape := generateTape(sess, outputPath)
 
-	tmpDir := hostFS.TempDir("session-")
-	if tmpDir == "" {
+	tmpDirResult := hostFS.TempDir("session-")
+	if !tmpDirResult.OK {
 		return core.Fail(core.E("RenderMP4", "failed to create temp dir", nil))
 	}
+	tmpDir := tmpDirResult.Value.(string)
 	defer hostFS.DeleteAll(tmpDir)
 
 	tapePath := core.PathJoin(tmpDir, core.Concat(core.ID(), ".tape"))

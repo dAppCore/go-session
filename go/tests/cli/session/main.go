@@ -17,8 +17,9 @@ const transcript = `{"type":"user","timestamp":"2026-02-20T10:00:00Z","sessionId
 // main runs the CLI session smoke test.
 func main() {
 	fs := (&core.Fs{}).NewUnrestricted()
-	dir := fs.TempDir("go-session-ax10-")
-	require(dir != "", "create temporary directory")
+	tmpDirResult := fs.TempDir("go-session-ax10-")
+	require(tmpDirResult.OK, "create temporary directory")
+	dir := tmpDirResult.Value.(string)
 	defer func() {
 		deleteResult := fs.DeleteAll(dir)
 		require(deleteResult.OK, "delete temporary directory")

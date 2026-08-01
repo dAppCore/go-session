@@ -13,7 +13,7 @@ import (
 // Example:
 // result := session.RenderHTML(sess, "/tmp/session.html")
 func RenderHTML(sess *Session, outputPath string) core.Result {
-	if !hostFS.IsDir(core.PathDir(outputPath)) {
+	if !hostFS.IsDir(core.PathDir(outputPath)).OK {
 		return core.Fail(core.E("RenderHTML", "parent directory does not exist", nil))
 	}
 
