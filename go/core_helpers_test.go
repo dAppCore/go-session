@@ -4,7 +4,7 @@ package session
 import (
 	"testing"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // --- sessionCore / hostContext / hostProcess ---

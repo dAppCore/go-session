@@ -14,7 +14,7 @@ import (
 	"context"
 	"time"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // SessionConfig is the typed-options struct for the session service.

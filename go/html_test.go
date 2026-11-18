@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 func TestHtml_RenderHTML_Good(t *testing.T) {

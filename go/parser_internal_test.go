@@ -4,7 +4,7 @@ package session
 import (
 	"testing"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // raw marshals m into a rawjson value for extractToolInput tests.

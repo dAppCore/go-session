@@ -8,8 +8,8 @@ import (
 	"slices" // Note: intrinsic — iterator collection, sorted keys, and session ordering; no core equivalent
 	"time"   // Note: intrinsic — RFC3339 transcript timestamps and session age calculations; no core equivalent
 
-	core "dappco.re/go"
-	coreerr "dappco.re/go"
+	core "github.com/dappcore/go"
+	coreerr "github.com/dappcore/go"
 )
 
 // maxScannerBuffer is the maximum line length the scanner will accept.

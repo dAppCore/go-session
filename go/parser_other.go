@@ -6,7 +6,7 @@ package session
 import (
 	"io" // Note: intrinsic — keeps the platform stub signature aligned with the Unix io.ReadCloser implementation; no core equivalent
 
-	coreerr "dappco.re/go"
+	coreerr "github.com/dappcore/go"
 )
 
 // openTranscriptNoFollow reports that secure no-follow opens are unavailable on this platform.

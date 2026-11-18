@@ -4,8 +4,8 @@ package main
 import (
 	"time"
 
-	core "dappco.re/go"
-	session "dappco.re/go/session"
+	core "github.com/dappcore/go"
+	session "github.com/dappcore/go-session/go"
 )
 
 const transcript = `{"type":"user","timestamp":"2026-02-20T10:00:00Z","sessionId":"ax10-session","message":{"role":"user","content":[{"type":"text","text":"Run the AX-10 smoke test"}]}}

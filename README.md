@@ -1,4 +1,4 @@
-[![Go Reference](https://pkg.go.dev/badge/dappco.re/go/session.svg)](https://pkg.go.dev/dappco.re/go/session)
+[![Go Reference](https://pkg.go.dev/badge/github.com/dappcore/go-session/go.svg)](https://pkg.go.dev/github.com/dappcore/go-session/go)
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE.md)
 [![Go Version](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat&logo=go)](go.mod)
 
@@ -6,7 +6,7 @@
 
 Claude Code JSONL transcript parser, analytics engine, and HTML timeline renderer. Parses Claude Code session files into structured event arrays (tool calls with round-trip durations, user and assistant messages), computes per-tool analytics (call counts, error rates, average and peak latency, estimated token usage), renders self-contained HTML timelines with collapsible panels and client-side search, and generates VHS tape scripts for MP4 video output. No external runtime dependencies — stdlib only.
 
-**Module**: `dappco.re/go/session`
+**Module**: `github.com/dappcore/go-session/go`
 **Licence**: EUPL-1.2
 **Language**: Go 1.26
 
@@ -16,7 +16,7 @@ Claude Code JSONL transcript parser, analytics engine, and HTML timeline rendere
 import (
 	"fmt"
 
-	"dappco.re/go/session"
+	"github.com/dappcore/go-session/go"
 )
 
 sess, _, err := session.ParseTranscript("/path/to/session.jsonl")

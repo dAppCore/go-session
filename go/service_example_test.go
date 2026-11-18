@@ -5,8 +5,8 @@ package session_test
 import (
 	"context"
 
-	core "dappco.re/go"
-	"dappco.re/go/session"
+	core "github.com/dappcore/go"
+	"github.com/dappcore/go-session/go"
 )
 
 // ExampleNewService constructs the session service factory through

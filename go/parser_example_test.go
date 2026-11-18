@@ -4,7 +4,7 @@ package session
 import (
 	"time"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 func ExampleSession_EventsSeq() {
