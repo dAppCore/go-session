@@ -6,7 +6,7 @@ import (
 	"slices" // Note: intrinsic — slices.Collect materialises search iterator results; no core equivalent
 	"time"   // Note: intrinsic — search result timestamps mirror parsed transcript event times; no core equivalent
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // SearchResult represents a match found in a session transcript.

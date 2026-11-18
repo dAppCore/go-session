@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Claude Code JSONL transcript parser, analytics engine, and HTML/video renderer. Module: `dappco.re/go/session`
+Claude Code JSONL transcript parser, analytics engine, and HTML/video renderer. Module: `github.com/dappcore/go-session/go`
 
 ## Commands
 
@@ -46,7 +46,7 @@ Coverage target: maintain ≥90.9%.
 - Exported declarations must have Go doc comments beginning with the identifier name
 - `go test ./...` and `go vet ./...` must pass before commit
 - SPDX header on all source files: `// SPDX-Licence-Identifier: EUPL-1.2`
-- Error handling: all errors must use `coreerr.E(op, msg, err)` from `dappco.re/go/core/log`, never `fmt.Errorf` or `errors.New`
+- Error handling: all errors must use `coreerr.E(op, msg, err)` from `github.com/dappcore/go-log/go`, never `fmt.Errorf` or `errors.New`
 - Banned imports in non-test Go files: `errors`, `github.com/pkg/errors`, and legacy `forge.lthn.ai/...` paths
 - Conventional commits: `type(scope): description`
 - Co-Author trailer: `Co-Authored-By: Virgil <virgil@lethean.io>`

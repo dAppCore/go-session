@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 func TestAnalytics_Analyse_Good(t *testing.T) {

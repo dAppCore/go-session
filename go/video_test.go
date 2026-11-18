@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 func TestVideo_RenderMP4_Good(t *testing.T) {

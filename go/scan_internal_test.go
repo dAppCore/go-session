@@ -4,7 +4,7 @@ package session
 import (
 	"testing"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // collectLines runs scanTranscriptLines over s and returns the lines handed

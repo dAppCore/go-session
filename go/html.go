@@ -5,7 +5,7 @@ import (
 	"html" // Note: intrinsic — escaping transcript content for generated HTML; stdlib encoder is the output contract
 	"time" // Note: intrinsic — duration formatting thresholds for rendered summaries; no core equivalent
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // RenderHTML generates a self-contained HTML timeline from a session.

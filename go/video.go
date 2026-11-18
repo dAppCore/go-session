@@ -4,7 +4,7 @@ package session
 import (
 	"io/fs" // Note: intrinsic — fs.FileInfo metadata for executable checks from hostFS.Stat; no core equivalent
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // RenderMP4 generates an MP4 video from session events using VHS (charmbracelet).

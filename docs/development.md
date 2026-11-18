@@ -141,7 +141,7 @@ Both `go vet ./...` and `golangci-lint run ./...` must be clean before committin
 
 ### Imports and Error Handling
 
-- Do not import `errors` or `github.com/pkg/errors` in non-test Go files; use `coreerr.E(op, msg, err)` from `dappco.re/go/core/log`.
+- Do not import `errors` or `github.com/pkg/errors` in non-test Go files; use `coreerr.E(op, msg, err)` from `github.com/dappcore/go-log/go`.
 - Do not reintroduce legacy `forge.lthn.ai/...` module paths; use `dappco.re/go/core/...` imports.
 
 ### Test Naming
@@ -220,7 +220,7 @@ Co-Authored-By: Virgil <virgil@lethean.io>
 
 ## Module Path and Go Workspace
 
-The module path is `dappco.re/go/session`. If this package is used within a Go workspace, add it with:
+The module path is `github.com/dappcore/go-session/go`. If this package is used within a Go workspace, add it with:
 
 ```bash
 go work use ./go-session

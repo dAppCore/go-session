@@ -7,7 +7,7 @@ import (
 	"io"      // Note: intrinsic — io.ReadCloser contract and EOF signalling for descriptor-backed transcript reads; no core equivalent
 	"syscall" // Note: intrinsic — O_NOFOLLOW descriptor opens and fstat checks are platform syscalls; no core equivalent
 
-	coreerr "dappco.re/go"
+	coreerr "github.com/dappcore/go"
 )
 
 type nofollowfile struct {

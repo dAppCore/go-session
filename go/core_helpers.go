@@ -4,7 +4,7 @@ package session
 import (
 	"context"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 var hostCore = core.New()

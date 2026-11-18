@@ -6,7 +6,7 @@ import (
 	"slices" // Note: intrinsic — slices.Sorted orders analytics rows deterministically; no core equivalent
 	"time"   // Note: intrinsic — time.Duration arithmetic for session, active-time, and latency metrics; no core equivalent
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // SessionAnalytics holds computed metrics for a parsed session.
